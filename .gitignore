@@ -1,7 +1,8 @@
-# Models — large binary files, use releases instead
+# Models — keep .onnx and .pt but NOT backups
 models/*.onnx
 models/*.pt
-models/*.pth
+!models/*.onnx
+!models/*.pt
 
 # Datasets — too large for git
 datasets/weightlifting-plates/
@@ -43,10 +44,12 @@ validation/dataset_benchmark/raw_videos/
 # YOLO cache
 runs/detect/plate_v1_run/
 
-# Pre-trained weights
+# Pre-trained weights (keep model files but not backups)
 yolov8n.pt
 *.onnx.backup
 *.pt.backup
+models/*.onnx.backup
+models/*.pt.backup
 
 
 # Analysis outputs
