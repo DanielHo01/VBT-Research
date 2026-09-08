@@ -1,0 +1,28 @@
+# Core CV & ML
+opencv-python==4.10.0.84
+opencv-contrib-python==4.10.0.84  # KCF/CSRT trackers, SIFT, etc.
+numpy==1.26.4
+scipy==1.13.0                      # Savitzky-Golay filter
+matplotlib==3.9.0                  # Visualization
+scikit-image==0.24.0               # Additional image processing
+
+# YOLO
+ultralytics==8.2.0                 # YOLOv8
+
+# Kalman filtering
+filterpy==1.4.5                    # Kalman filter implementations
+
+# Data processing
+pandas==2.2.0
+tqdm==4.66.0                       # Progress bars
+pillow==10.3.0                     # Image loading
+
+# Jupyter
+jupyter==1.0.0
+ipykernel==6.29.0
+ipywidgets==8.1.0
+
+# Optional: GPU acceleration (uncomment if CUDA available)
+# torch==2.3.0
+# torchvision==0.18.0
+# torchaudio==2.3.0

@@ -1,0 +1,44 @@
+# Models — large binary files, use releases instead
+models/*.onnx
+models/*.pt
+models/*.pth
+
+# Datasets — too large for git
+datasets/weightlifting-plates/
+datasets/owlvit_pseudo/
+datasets/interactive_labels/
+
+# Archives — old experiment debris
+_archive/
+archives/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Windows
+*.tmp
+*.log
+
+# Validation raw videos
+validation/dataset_benchmark/raw_videos/
+
+# YOLO cache
+runs/detect/plate_v1_run/

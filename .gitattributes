@@ -1,0 +1,4 @@
+# Track model files as LFS would, but using git-annex or plain git
+# For now, just note that large files are committed
+*.onnx filter= diff=  binary
+*.pt   filter= diff=  binary
