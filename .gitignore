@@ -42,3 +42,15 @@ validation/dataset_benchmark/raw_videos/
 
 # YOLO cache
 runs/detect/plate_v1_run/
+
+# Pre-trained weights
+yolov8n.pt
+*.onnx.backup
+*.pt.backup
+
+
+# Analysis outputs
+detection_distributions.json
+
+# One-off training scripts
+train_quick_test.py
