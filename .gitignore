@@ -38,11 +38,8 @@ venv/
 *.tmp
 *.log
 
-# Validation raw videos — distributed via GitHub Releases (not git)
-# Download: https://github.com/DanielHo01/VBT-Research/releases/tag/v1.0-videos
-#   gh release download v1.0-videos --pattern "raw_videos.zip" --dir .
-#   unzip raw_videos.zip  -> produces validation/dataset_benchmark/raw_videos/
-validation/dataset_benchmark/raw_videos/
+# Validation raw videos — committed to git (small enough at ~100 MB total)
+# 34 mp4 clips under validation/dataset_benchmark/raw_videos/
 
 # YOLO cache
 runs/detect/plate_v1_run/

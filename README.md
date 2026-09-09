@@ -21,35 +21,11 @@ python3 scripts/interactive_label.py <video_file.mp4>
 
 # Extract pseudo-labels via OWL-ViT
 python3 scripts/extract_owlvit_pseudo.py
-
-# Download the 34 validation videos (98 MB) from GitHub Releases
-gh release download v1.0-videos --pattern "raw_videos.zip" --dir .
-unzip raw_videos.zip   # produces validation/dataset_benchmark/raw_videos/
-```
-
-## Validation Dataset
-
-The 34 benchmark videos (`validation/dataset_benchmark/raw_videos/`) are **not** tracked in git due to size.
-
-Download them from the GitHub Release:
-
-- **[Release `v1.0-videos`](https://github.com/DanielHo01/VBT-Research/releases/tag/v1.0-videos)** — `raw_videos.zip` (98 MB)
-
-After downloading, verify integrity:
-
-```bash
-python3 -c "
-import json, os
-idx = json.load(open('validation/dataset_benchmark/dataset_index.json'))
-files = {f for f in os.listdir('validation/dataset_benchmark/raw_videos') if f.endswith('.mp4')}
-assert len(idx) == 34 and {v['video_id'] for v in idx} == files
-print('OK: 34 videos match dataset_index.json')
-"
 ```
 
 ## Project Structure
 
-```
+```text
 docs/                  # Architecture, dataset, training, roadmap
 models/                # Trained ONNX models
   barbell_v4.onnx      ← Production model (RMSE=0.88)
@@ -58,8 +34,7 @@ scripts/               # Core scripts
   interactive_label.py
   extract_owlvit_pseudo.py
   verify_labels.py
-validation/            # 34 benchmark videos + ground truth
-                    # (videos NOT in git — download from Releases)
+validation/            # 34 benchmark videos + ground truth (videos in git)
 ```
 
 ## Models
@@ -79,7 +54,7 @@ validation/            # 34 benchmark videos + ground truth
 
 ## Requirements
 
-```
+```text
 opencv-python>=4.10
 numpy>=1.26
 scipy>=1.13
