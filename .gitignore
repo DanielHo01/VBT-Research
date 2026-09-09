@@ -38,8 +38,8 @@ venv/
 *.tmp
 *.log
 
-# Validation raw videos
-validation/dataset_benchmark/raw_videos/
+# Validation raw videos — committed to git (small enough at ~100 MB total)
+# 34 mp4 clips under validation/dataset_benchmark/raw_videos/
 
 # Benchmark / diagnosis outputs (local artifacts, regenerable)
 validation/dataset_benchmark/results/

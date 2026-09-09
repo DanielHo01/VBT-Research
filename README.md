@@ -55,7 +55,7 @@ bash scripts/run_local_validation.sh
 
 ## Project Structure
 
-```
+```text
 docs/                  # Architecture, dataset, training, roadmap
 models/                # Trained ONNX models
   barbell_v4.onnx      ← Production model (旧基准 RMSE=0.88，修复后待重测)
@@ -66,14 +66,14 @@ scripts/               # Core scripts
   interactive_label.py
   extract_owlvit_pseudo.py
   verify_labels.py
-validation/            # 34 benchmark videos (raw_videos 本地)+ ground truth
+validation/            # 34 benchmark videos + ground truth (videos in git)
   dataset_benchmark/config.py # 相对路径/环境变量解析
 ```
 
 ## Models
 
 | Model | RMSE (MCV) | Notes |
-|-------|-------------|-------|
+| ------- | ------------- | ------- |
 | `barbell_v4.onnx` | **0.88** | Best — production use |
 | `yolo11_plate.onnx` | ? | Untested — needs benchmark |
 | `plate_v1.onnx` | ~1.4 | Poor on side-view |
@@ -87,7 +87,7 @@ validation/            # 34 benchmark videos (raw_videos 本地)+ ground truth
 
 ## Requirements
 
-```
+```text
 opencv-python>=4.10
 numpy>=1.26
 scipy>=1.13
