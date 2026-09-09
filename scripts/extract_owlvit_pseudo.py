@@ -5,14 +5,18 @@ import os
 os.environ['HF_HUB_OFFLINE'] = '1'
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
-import argparse, time, json, hashlib
+import argparse, time, json, hashlib, sys
+from pathlib import Path
 import numpy as np
 import cv2, torch
 from transformers import OwlViTForObjectDetection, AutoImageProcessor, AutoTokenizer
 
-VIDEO_DIR = r'D:\EasyVBT-Research\validation\dataset_benchmark\raw_videos'
-OUTPUT_DIR = r'D:\EasyVBT-Research\datasets\owlvit_pseudo'
-INDEX_PATH = r'D:\EasyVBT-Research\validation\dataset_benchmark\dataset_index.json'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'validation' / 'dataset_benchmark'))
+import config as cfg
+
+VIDEO_DIR = str(cfg.raw_videos_dir())
+OUTPUT_DIR = str(cfg.datasets_dir() / 'owlvit_pseudo')
+INDEX_PATH = str(cfg.dataset_index_path())
 TEXTS = [
     "a weight plate", "barbell plate", "gym weight",
     "a red plate", "a blue plate", "a yellow plate",
@@ -225,17 +229,21 @@ def save_item(det, out_dir, videoid, idx):
 
 
 def main():
-    args = argparse.Namespace(
-        max_fps=1.0,
-        output=OUTPUT_DIR,
-        pos_dist=100,
-        min_dets=3,
-        limit=None
-    )
-    
+    global VIDEO_DIR
+    ap = argparse.ArgumentParser(description='OWL-ViT 伪标签提取（本地）')
+    ap.add_argument('--videos-dir', default=VIDEO_DIR)
+    ap.add_argument('--output', default=OUTPUT_DIR)
+    ap.add_argument('--index', default=INDEX_PATH)
+    ap.add_argument('--max-fps', type=float, default=1.0)
+    ap.add_argument('--pos-dist', type=int, default=100)
+    ap.add_argument('--min-dets', type=int, default=3)
+    ap.add_argument('--limit', type=int, default=None)
+    args = ap.parse_args()
+    VIDEO_DIR = args.videos_dir
+
     load_model()
     
-    with open(INDEX_PATH) as f:
+    with open(args.index) as f:
         dataset = json.load(f)
     if args.limit:
         dataset = dataset[:args.limit]

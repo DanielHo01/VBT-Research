@@ -1,10 +1,12 @@
 # 项目状态看板
 
-> 最近更新: 2025-09-08
+> 最近更新: 2026-09-10
 
 ## 当前最优模型
 
-**barbell_v4.onnx** — RMSE=0.88, 91% pass rate (31/34 视频)
+**barbell_v4.onnx** — 旧基准 RMSE=0.88（91% pass 是 err≤2.0 口径，基本无意义）。
+2026-09 已修复检测器重复 sigmoid 的 bug 并移除 scale_factor=1.15 魔数，
+**旧数字不可比，需用本地视频重跑基准**（`scripts/run_full_benchmark.py`）。
 
 ---
 

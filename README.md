@@ -10,31 +10,58 @@ Vertical Bar tracking research — a computer vision pipeline for estimating bar
 
 **Phase 2 🔲** — Not yet started.
 
-## Quick Start
+## Quick Start (本地验证，视频不上传)
 
 ```bash
-# Run full benchmark (34 videos)
+# 1. 安装依赖（建议 venv）
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# 2. 把 34 个验证视频放到 validation/dataset_benchmark/raw_videos/
+#    （也可以用环境变量指向任意本地目录，视频不离开本机）
+export VBT_VIDEOS_DIR=/path/to/your/raw_videos
+
+# 3. 无需视频的冒烟自检（回归测试，验证检测器修复）
+python3 scripts/self_test.py
+
+# 4. 跑完整基准（默认 barbell_v4 + associator 生产管线）
 python3 scripts/run_full_benchmark.py
+python3 scripts/run_full_benchmark.py --model yolo11_plate   # 换模型
+python3 scripts/run_full_benchmark.py --limit 5              # 先跑前5个
 
-# Run interactive labeling tool (OWL-ViT suggests, you click to accept/reject)
-python3 scripts/interactive_label.py <video_file.mp4>
+# 5. 逐视频错误定位（找 RMSE 大的原因）
+python3 scripts/diagnose_benchmark.py
 
-# Extract pseudo-labels via OWL-ViT
-python3 scripts/extract_owlvit_pseudo.py
+# 6. 多管线横向对比（含绘图）
+python3 validation/dataset_benchmark/run_benchmark.py
 ```
+
+所有脚本路径默认相对仓库根目录解析（`validation/dataset_benchmark/config.py`），
+可用环境变量覆盖：`VBT_MODEL_PATH` / `VBT_VIDEOS_DIR` / `VBT_INDEX_PATH` / `VBT_OUTPUT_DIR`。
+
+### 重要：修复说明（2026-09）
+
+旧版检测器对 ONNX 导出的置信度**重复应用 sigmoid**（输出已是 [0,1] 概率），
+导致空白帧也被当作 ~0.50 置信度的检测 —— 这是旧基准 RMSE=0.88 异常偏大的
+主要原因之一。本版本已修复，并移除了标定里的经验魔数 `scale_factor=1.15`
+（默认改为 1.0，需要对比旧结果时可显式传 `--scale-factor 1.15`）。
+
+**旧 RMSE 数字不可直接比较**，请在本地用视频重新跑基准。
 
 ## Project Structure
 
 ```
 docs/                  # Architecture, dataset, training, roadmap
 models/                # Trained ONNX models
-  barbell_v4.onnx      ← Production model (RMSE=0.88)
+  barbell_v4.onnx      ← Production model (旧基准 RMSE=0.88，修复后待重测)
 scripts/               # Core scripts
-  run_full_benchmark.py
+  run_full_benchmark.py       # 单模型基准（可移植 CLI）
+  diagnose_benchmark.py       # 逐视频错误定位
+  self_test.py                # 无需视频的冒烟自检
   interactive_label.py
   extract_owlvit_pseudo.py
   verify_labels.py
-validation/            # 34 benchmark videos + ground truth
+validation/            # 34 benchmark videos (raw_videos 本地)+ ground truth
+  dataset_benchmark/config.py # 相对路径/环境变量解析
 ```
 
 ## Models

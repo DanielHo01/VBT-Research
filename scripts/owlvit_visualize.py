@@ -127,124 +127,142 @@ def annotate_video(vpath, times_s, out_path, title):
 # ============================================================
 # 1. Annotated montages for two videos
 # ============================================================
-vpath_20 = r'D:\EasyVBT-Research\validation\dataset_benchmark\raw_videos\20kg_0.87_0.88_0.89_0.91.mp4'
-vpath_30 = r'D:\EasyVBT-Research\validation\dataset_benchmark\raw_videos\30kg_1.03_0.89_0.76_0.65.mp4'
-out_dir = r'D:\EasyVBT-Research\datasets\owlvit_vis'
-os.makedirs(out_dir, exist_ok=True)
+def main():
+    import argparse
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'validation' / 'dataset_benchmark'))
+    import config as cfg
 
-print("Generating annotated montages...")
+    defaults = cfg.raw_videos_dir()
+    p = argparse.ArgumentParser(description='OWL-ViT 可视化（本地）')
+    p.add_argument('--video-20', default=str(defaults / '20kg_0.87_0.88_0.89_0.91.mp4'))
+    p.add_argument('--video-30', default=str(defaults / '30kg_1.03_0.89_0.76_0.65.mp4'))
+    p.add_argument('--output-dir', default=str(cfg.datasets_dir() / 'owlvit_vis'))
+    args = p.parse_args()
 
-annotate_video(
-    vpath_20,
-    times_s=[0, 2, 4, 6, 8, 10],
-    out_path=os.path.join(out_dir, '20kg_keyframes.jpg'),
-    title="OWL-ViT 零样本检测 — 20kg 侧视图\n绿色=高置信(>0.08) 黄色=中(>0.06) 橙色=低(<0.06)"
-)
+    vpath_20 = args.video_20
+    vpath_30 = args.video_30
+    out_dir = args.output_dir
+    os.makedirs(out_dir, exist_ok=True)
 
-annotate_video(
-    vpath_30,
-    times_s=[0, 1.5, 3.0, 4.5, 6.0, 7.5],
-    out_path=os.path.join(out_dir, '30kg_keyframes.jpg'),
-    title="OWL-ViT 零样本检测 — 30kg 侧视图\n绿色=高置信(>0.08) 黄色=中(>0.06) 橙色=低(<0.06)"
-)
+    print("Generating annotated montages...")
 
-# ============================================================
-# 2. Extract and save large plate crops
-# ============================================================
-print("\nExtracting large plate crops...")
-crop_dir = os.path.join(out_dir, 'crops_big')
-os.makedirs(crop_dir, exist_ok=True)
+    annotate_video(
+        vpath_20,
+        times_s=[0, 2, 4, 6, 8, 10],
+        out_path=os.path.join(out_dir, '20kg_keyframes.jpg'),
+        title="OWL-ViT 零样本检测 — 20kg 侧视图\n绿色=高置信(>0.08) 黄色=中(>0.06) 橙色=低(<0.06)"
+    )
 
-cap = cv2.VideoCapture(vpath_30)
-fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    annotate_video(
+        vpath_30,
+        times_s=[0, 1.5, 3.0, 4.5, 6.0, 7.5],
+        out_path=os.path.join(out_dir, '30kg_keyframes.jpg'),
+        title="OWL-ViT 零样本检测 — 30kg 侧视图\n绿色=高置信(>0.08) 黄色=中(>0.06) 橙色=低(<0.06)"
+    )
 
-# Collect all detections across all frames (sample every 3 frames)
-all_dets = []
-for fi in range(0, fc, 3):
-    cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
-    ret, frame = cap.read()
-    if not ret:
-        continue
-    dets = nms(detect(frame))
-    for d in dets:
-        all_dets.append({'frame': frame.copy(), 'fi': fi, **d})
-cap.release()
+    # ============================================================
+    # 2. Extract and save large plate crops
+    # ============================================================
+    print("\nExtracting large plate crops...")
+    crop_dir = os.path.join(out_dir, 'crops_big')
+    os.makedirs(crop_dir, exist_ok=True)
 
-print(f"  Total raw detections: {len(all_dets)}")
+    cap = cv2.VideoCapture(vpath_30)
+    fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
-# Cluster by position
-clusters = []
-used = set()
-for i, di in enumerate(all_dets):
-    if i in used:
-        continue
-    cl = [i]
-    used.add(i)
-    for j, dj in enumerate(all_dets):
-        if j in used:
+    # Collect all detections across all frames (sample every 3 frames)
+    all_dets = []
+    for fi in range(0, fc, 3):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
+        ret, frame = cap.read()
+        if not ret:
             continue
-        if np.hypot(di['cx']-dj['cx'], di['cy']-dj['cy']) < 80:
-            cl.append(j)
-            used.add(j)
-    clusters.append(cl)
+        dets = nms(detect(frame))
+        for d in dets:
+            all_dets.append({'frame': frame.copy(), 'fi': fi, **d})
+    cap.release()
 
-# Keep stable clusters (detected in >= 3 frames)
-stable = []
-for cl in clusters:
-    ds = [all_dets[i] for i in cl]
-    n_frames = len(set(d['fi'] for d in ds))
-    if n_frames < 3:
-        continue
-    best = max(ds, key=lambda x: x['score'])
-    stable.append({
-        'd': best,
-        'n_frames': n_frames,
-        'total_dets': len(ds),
-        'avg_score': float(np.mean([dd['score'] for dd in ds])),
-        'cx_std': float(np.std([dd['cx'] for dd in ds])),
-        'cy_std': float(np.std([dd['cy'] for dd in ds])),
-    })
+    print(f"  Total raw detections: {len(all_dets)}")
 
-stable.sort(key=lambda x: -x['n_frames'])
-print(f"  Stable clusters (>=3 frames): {len(stable)}")
+    # Cluster by position
+    clusters = []
+    used = set()
+    for i, di in enumerate(all_dets):
+        if i in used:
+            continue
+        cl = [i]
+        used.add(i)
+        for j, dj in enumerate(all_dets):
+            if j in used:
+                continue
+            if np.hypot(di['cx']-dj['cx'], di['cy']-dj['cy']) < 80:
+                cl.append(j)
+                used.add(j)
+        clusters.append(cl)
 
-for rank, info in enumerate(stable[:8]):
-    d = info['d']
-    frame = d['frame']
+    # Keep stable clusters (detected in >= 3 frames)
+    stable = []
+    for cl in clusters:
+        ds = [all_dets[i] for i in cl]
+        n_frames = len(set(d['fi'] for d in ds))
+        if n_frames < 3:
+            continue
+        best = max(ds, key=lambda x: x['score'])
+        stable.append({
+            'd': best,
+            'n_frames': n_frames,
+            'total_dets': len(ds),
+            'avg_score': float(np.mean([dd['score'] for dd in ds])),
+            'cx_std': float(np.std([dd['cx'] for dd in ds])),
+            'cy_std': float(np.std([dd['cy'] for dd in ds])),
+        })
 
-    # Extract crop with padding
-    pad = 0.25
-    x1 = max(0, int(d['cx'] - d['w']/2 - d['w']*pad))
-    y1 = max(0, int(d['cy'] - d['h']/2 - d['h']*pad))
-    x2 = min(W, int(d['cx'] + d['w']/2 + d['w']*pad))
-    y2 = min(H, int(d['cy'] + d['h']/2 + d['h']*pad))
-    crop = frame[y1:y2, x1:x2]
+    stable.sort(key=lambda x: -x['n_frames'])
+    print(f"  Stable clusters (>=3 frames): {len(stable)}")
 
-    # Draw bbox on crop (relative coordinates)
-    rel_x1 = int(d['cx'] - d['w']/2 - x1)
-    rel_y1 = int(d['cy'] - d['h']/2 - y1)
-    rel_x2 = int(d['cx'] + d['w']/2 - x1)
-    rel_y2 = int(d['cy'] + d['h']/2 - y1)
-    cv2.rectangle(crop, (rel_x1, rel_y1), (rel_x2, rel_y2), (0, 255, 0), 2)
+    for rank, info in enumerate(stable[:8]):
+        d = info['d']
+        frame = d['frame']
 
-    # Label
-    label = f"#{rank+1}  n={info['n_frames']}f  score={info['avg_score']:.3f}  r={d['ratio']:.2f}"
-    cv2.putText(crop, label, (5, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        # Extract crop with padding
+        pad = 0.25
+        x1 = max(0, int(d['cx'] - d['w']/2 - d['w']*pad))
+        y1 = max(0, int(d['cy'] - d['h']/2 - d['h']*pad))
+        x2 = min(W, int(d['cx'] + d['w']/2 + d['w']*pad))
+        y2 = min(H, int(d['cy'] + d['h']/2 + d['h']*pad))
+        crop = frame[y1:y2, x1:x2]
 
-    # Upscale 4x for visibility
-    h_c, w_c = crop.shape[:2]
-    crop_big = cv2.resize(crop, (w_c*4, h_c*4), interpolation=cv2.INTER_LINEAR)
+        # Draw bbox on crop (relative coordinates)
+        rel_x1 = int(d['cx'] - d['w']/2 - x1)
+        rel_y1 = int(d['cy'] - d['h']/2 - y1)
+        rel_x2 = int(d['cx'] + d['w']/2 - x1)
+        rel_y2 = int(d['cy'] + d['h']/2 - y1)
+        cv2.rectangle(crop, (rel_x1, rel_y1), (rel_x2, rel_y2), (0, 255, 0), 2)
 
-    fname = f"plate_r{rank+1}_n{info['n_frames']}_score{info['avg_score']:.3f}_cx{d['cx']:.0f}_cy{d['cy']:.0f}.jpg"
-    out_crop = os.path.join(crop_dir, fname)
-    cv2.imwrite(out_crop, crop_big, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        # Label
+        label = f"#{rank+1}  n={info['n_frames']}f  score={info['avg_score']:.3f}  r={d['ratio']:.2f}"
+        cv2.putText(crop, label, (5, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-    print(f"  {fname}")
-    print(f"    cluster: n_frames={info['n_frames']}, score={info['avg_score']:.3f}, "
-          f"CX={d['cx']:.0f}±{info['cx_std']:.1f}, CY={d['cy']:.0f}±{info['cy_std']:.1f}, "
-          f"crop={crop.shape[1]}x{crop.shape[0]}")
+        # Upscale 4x for visibility
+        h_c, w_c = crop.shape[:2]
+        crop_big = cv2.resize(crop, (w_c*4, h_c*4), interpolation=cv2.INTER_LINEAR)
 
-print(f"\nAll outputs: {out_dir}")
+        fname = f"plate_r{rank+1}_n{info['n_frames']}_score{info['avg_score']:.3f}_cx{d['cx']:.0f}_cy{d['cy']:.0f}.jpg"
+        out_crop = os.path.join(crop_dir, fname)
+        cv2.imwrite(out_crop, crop_big, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+        print(f"  {fname}")
+        print(f"    cluster: n_frames={info['n_frames']}, score={info['avg_score']:.3f}, "
+              f"CX={d['cx']:.0f}±{info['cx_std']:.1f}, CY={d['cy']:.0f}±{info['cy_std']:.1f}, "
+              f"crop={crop.shape[1]}x{crop.shape[0]}")
+
+    print(f"\nAll outputs: {out_dir}")
+
+
+if __name__ == '__main__':
+    main()

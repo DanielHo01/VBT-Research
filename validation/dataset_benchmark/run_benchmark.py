@@ -1,11 +1,13 @@
 """
 run_benchmark.py
-主入口：遍历 dataset_index.json，对比 4 组算法管线，
+主入口：遍历 dataset_index.json，对比多组算法管线，
       输出终端表格 + CSV + Bland-Altman 图 + 1:1 散点图。
 
-用法：
-    cd D:/EasyVBT-Research/validation/dataset_benchmark
-    python run_benchmark.py
+用法（视频留在本地，不上传）：
+    python run_benchmark.py                          # 仓库内相对路径
+    python run_benchmark.py --model yolo11_plate
+    python run_benchmark.py --videos-dir /path/to/raw_videos
+    python run_benchmark.py --limit 5 --no-plot
 
 依赖：
     pip install opencv-python onnxruntime numpy scipy pandas matplotlib
@@ -16,34 +18,33 @@ import os
 import sys
 import json
 import time
+import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
 
 # 确保 algorithms 包可导入
 sys.path.insert(0, str(Path(__file__).parent))
 
+import config as cfg
 from algorithms.pipelines import run_pipeline
 from metrics_evaluator import MetricsEvaluator, aggregate_results
 
 
 # ── 配置 ────────────────────────────────────────────────────
 
-BASE_DIR   = Path(r"D:\EasyVBT-Research\validation\dataset_benchmark")
-RAW_VIDEOS = BASE_DIR / "raw_videos"
-INDEX_FILE = BASE_DIR / "dataset_index.json"
-OUTPUT_DIR = BASE_DIR / "results"
-OUTPUT_DIR.mkdir(exist_ok=True)
+RAW_VIDEOS = cfg.raw_videos_dir()
+INDEX_FILE = cfg.dataset_index_path()
+OUTPUT_DIR = cfg.output_dir()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 PIPELINES = [
-    ("baseline_sg",      "Baseline SG (15×3)"),
+    ("baseline_sg",       "Baseline SG (15×3)"),
     ("subpixel_spline",   "Subpixel Spline"),
-    ("kalman_sg",        "Kalman + SG"),
-    ("global_smoothing", "Global Smoothing"),
+    ("kalman_sg",         "Kalman + SG"),
+    ("global_smoothing",  "Global Smoothing"),
+    ("associator",        "Associator + α-β + SG (生产管线)"),
 ]
 
 ALGO_KEYS = [p[0] for p in PIPELINES]
@@ -51,22 +52,63 @@ ALGO_KEYS = [p[0] for p in PIPELINES]
 
 # ── 主流程 ──────────────────────────────────────────────────
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="多管线基准对比（本地）")
+    p.add_argument('--videos-dir', type=Path, default=None)
+    p.add_argument('--index', type=Path, default=None)
+    p.add_argument('--out-dir', type=Path, default=None)
+    p.add_argument('--model', type=str, default=None,
+                   help='ONNX 模型：路径或 barbell_v4/plate_v1/yolo11_plate')
+    p.add_argument('--plate-diameter', type=float, default=0.45)
+    p.add_argument('--scale-factor', type=float, default=1.0)
+    p.add_argument('--conf-threshold', type=float, default=0.25)
+    p.add_argument('--limit', type=int, default=0)
+    p.add_argument('--no-plot', action='store_true', help='跳过绘图')
+    return p.parse_args()
+
+
 def main():
+    args = parse_args()
+    videos_dir = (args.videos_dir or RAW_VIDEOS).resolve()
+    index_file = (args.index or INDEX_FILE).resolve()
+    out_dir = (args.out_dir or OUTPUT_DIR).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.model:
+        short = {
+            'barbell_v4': cfg.REPO_ROOT / 'models' / 'barbell_v4.onnx',
+            'plate_v1': cfg.REPO_ROOT / 'models' / 'plate_v1.onnx',
+            'yolo11_plate': cfg.REPO_ROOT / 'models' / 'yolo11_plate.onnx',
+        }
+        model_path = short.get(args.model, Path(args.model).expanduser())
+    else:
+        model_path = cfg.default_model_path()
+
+    if not model_path.exists():
+        print(f"[错误] 模型不存在: {model_path}")
+        return 1
+    if not videos_dir.exists():
+        print(f"[错误] 视频目录不存在: {videos_dir}")
+        return 1
+
     print("=" * 72)
     print("  EasyVBT 算法基准验证  vs  GymAware Ground Truth")
     print("=" * 72)
 
     # 加载数据集
-    with open(INDEX_FILE, "r", encoding="utf-8") as f:
+    with open(index_file, "r", encoding="utf-8") as f:
         dataset = json.load(f)
+    if args.limit > 0:
+        dataset = dataset[:args.limit]
 
     print(f"\n📋 数据集: {len(dataset)} 个视频")
-    print(f"   视频目录: {RAW_VIDEOS}")
+    print(f"   视频目录: {videos_dir}")
+    print(f"   模型:     {model_path}")
 
     # 预热 ONNX 模型（首次加载较慢）
     print("\n🧠 预热 ONNX 模型 ...")
     from algorithms.common import YoloPlateDetector
-    _ = YoloPlateDetector()
+    _ = YoloPlateDetector(str(model_path))
     print("   模型加载完成\n")
 
     # ── 逐视频评估 ──────────────────────────────────────────
@@ -76,7 +118,7 @@ def main():
     for item in dataset:
         video_id    = item["video_id"]
         gt_mcvs     = item["gt_reps_mcv"]
-        video_path  = RAW_VIDEOS / video_id
+        video_path  = videos_dir / video_id
 
         if not video_path.exists():
             print(f"  ⏭ 跳过不存在: {video_id}")
@@ -87,7 +129,12 @@ def main():
         for algo_key, algo_label in PIPELINES:
             t0 = time.time()
             try:
-                pred_reps = run_pipeline(video_path, algo_type=algo_key)
+                pred_reps = run_pipeline(
+                    video_path, algo_type=algo_key,
+                    model_path=str(model_path),
+                    scale_factor=args.scale_factor,
+                    conf_threshold=args.conf_threshold,
+                )
             except Exception as e:
                 print(f"    [{algo_key}] ERROR: {e}")
                 pred_reps = []
@@ -132,6 +179,7 @@ def main():
     print("  " + "─" * (len(header) - 2))
 
     best_algo   = None
+    best_algo_k = None
     best_rmse   = 999.0
 
     for algo_key, algo_label in PIPELINES:
@@ -194,21 +242,38 @@ def main():
 
     if rows:
         df = pd.DataFrame(rows)
-        csv_path = OUTPUT_DIR / "per_rep_results.csv"
+        csv_path = out_dir / "per_rep_results.csv"
         df.to_csv(csv_path, index=False, encoding="utf-8-sig")
         print(f"\n📄 CSV 导出: {csv_path}")
 
     # ── 图表绘制 ─────────────────────────────────────────────
-    plot_results(agg_results, best_algo, best_rmse)
+    if not args.no_plot:
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as mpatches
+            from matplotlib.lines import Line2D
+            plot_results(agg_results, best_algo, best_rmse, out_dir)
+        except Exception as e:
+            print(f"  ⚠ 绘图失败（跳过）: {e}")
 
-    print(f"\n✅ 基准验证完成！结果目录: {OUTPUT_DIR}")
+    print(f"\n✅ 基准验证完成！结果目录: {out_dir}")
+    # 兼容 __main__ 下旧接口调用
     return best_algo_k, best_rmse
 
 
 # ── 绘图 ────────────────────────────────────────────────────
 
-def plot_results(agg_results: dict, best_algo: str, best_rmse: float):
+def plot_results(agg_results: dict, best_algo: str, best_rmse: float,
+                 out_dir: Path | None = None):
     """绘制 1:1 散点图 + Bland-Altman 图"""
+    if out_dir is None:
+        out_dir = OUTPUT_DIR
+
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches  # noqa: F401
+    from matplotlib.lines import Line2D  # noqa: F401
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
     fig.suptitle(f"EasyVBT vs GymAware — Benchmark Results  (Best: {best_algo}, RMSE={best_rmse:.4f} m/s)",
@@ -276,8 +341,8 @@ def plot_results(agg_results: dict, best_algo: str, best_rmse: float):
 
     plt.tight_layout()
 
-    scatter_path = OUTPUT_DIR / "benchmark_results.png"
-    ba_path      = OUTPUT_DIR / "bland_altman.png"
+    scatter_path = out_dir / "benchmark_results.png"
+    ba_path      = out_dir / "bland_altman.png"
     fig.savefig(scatter_path, dpi=300, bbox_inches="tight")
     ax2.figure.savefig(ba_path, dpi=300, bbox_inches="tight")
 

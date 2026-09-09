@@ -41,6 +41,10 @@ venv/
 # Validation raw videos
 validation/dataset_benchmark/raw_videos/
 
+# Benchmark / diagnosis outputs (local artifacts, regenerable)
+validation/dataset_benchmark/results/
+reports/
+
 # YOLO cache
 runs/detect/plate_v1_run/
 

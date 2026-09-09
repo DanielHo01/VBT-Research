@@ -256,6 +256,9 @@ def _parse_video(video_path: str,
                 plate_diameter_m: float = 0.45,
                 detector: YoloPlateDetector | None = None,
                 min_conf: float = 0.35,
+                model_path: str | None = None,
+                scale_factor: float = 1.0,
+                conf_threshold: float = 0.25,
                 ) -> tuple[np.ndarray, np.ndarray, float, float]:
     """
     改动（专家B）:
@@ -264,7 +267,7 @@ def _parse_video(video_path: str,
       - 跨 gap 插值上限 max_gap_fill_frames=10
     """
     if detector is None:
-        detector = YoloPlateDetector()
+        detector = YoloPlateDetector(model_path)
 
     cap = cv2.VideoCapture(video_path)
     fps = float(cap.get(cv2.CAP_PROP_FPS))
@@ -283,7 +286,7 @@ def _parse_video(video_path: str,
             break
 
         if frame_idx % detect_every == 0:
-            det = detector.detect(frame)
+            det = detector.detect(frame, conf_threshold=conf_threshold)
             if det is not None:
                 bw, bh = float(det['w']), float(det['h'])
                 conf = float(det['score'])
@@ -319,7 +322,8 @@ def _parse_video(video_path: str,
 
     valid_mask = ~np.isnan(ys_raw)
     if valid_mask.sum() < 5:
-        return np.arange(n_frames) / fps, ys_raw, fps, 0.001
+        # scale=0 -> 调用方判定为“无法标定”，不产出伪结果
+        return np.arange(n_frames) / fps, ys_raw, fps, 0.0
 
     ys_valid = ys_raw[valid_mask]
     confs_v  = confs_raw[valid_mask]
@@ -358,9 +362,10 @@ def _parse_video(video_path: str,
     scale_mask = confs_mask_for_scale & (heights_v > 0)
     scale_heights = heights_v[scale_mask]
     if len(scale_heights) > 5:
-        scale, _ = calibrate_scale(scale_heights.tolist(), plate_diameter_m)
+        scale, _ = calibrate_scale(scale_heights.tolist(), plate_diameter_m,
+                                   scale_factor=scale_factor)
     else:
-        scale = 0.001
+        scale = 0.0
 
     return np.arange(n_frames) / fps, ys_full, fps, scale
 
@@ -372,6 +377,10 @@ def _parse_video_associator(video_path: str,
                             dist_threshold_px: float = 200.0,
                             anchor_frames: int = 5,
                             lost_timeout_ms: float = 250.0,
+                            model_path: str | None = None,
+                            scale_factor: float = 1.0,
+                            conf_threshold: float = 0.25,
+                            traces: dict | None = None,
                             ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float, TargetAssociator]:
     """
     全帧检测 + TargetAssociator + 圆形检测标定。
@@ -382,6 +391,13 @@ def _parse_video_associator(video_path: str,
       scale:     mpp（只用 ratio <= 1.4 的检测标定）
       assoc:     TargetAssociator 实例（用于后续分析）
 
+    参数
+    ----
+    model_path     : ONNX 模型路径（None -> 使用 config 默认模型）
+    scale_factor   : 标定修正系数（默认 1.0，旧代码魔数 1.15 已移除）
+    conf_threshold : 检测器置信度阈值（传给 YoloPlateDetector.detect）
+    traces         : 若传入 dict，则写入逐帧 conf/width/height/ratio 轨迹，供诊断
+
     关键改动（专家B）:
       1. 不再用圆形度一票否决：ratio > 1.4 的检测仍可作为中心点
       2. TargetAssociator 用距离门控锁定目标
@@ -389,7 +405,7 @@ def _parse_video_associator(video_path: str,
       4. 跨 gap > 250ms → 分段，不跨 gap 插值后再分段
     """
     if detector is None:
-        detector = YoloPlateDetector()
+        detector = YoloPlateDetector(model_path)
 
     cap = cv2.VideoCapture(video_path)
     fps = float(cap.get(cv2.CAP_PROP_FPS))
@@ -416,7 +432,7 @@ def _parse_video_associator(video_path: str,
         if not ret:
             break
 
-        det = detector.detect(frame)
+        det = detector.detect(frame, conf_threshold=conf_threshold)
         det_cx = det_cy = det_w = det_h = det_conf = det_ratio = None
 
         ASPECT_RATIO_THRESH = 1.4  # 圆形度门控：拒绝 rack/立柱/非 plate 检测
@@ -491,12 +507,9 @@ def _parse_video_associator(video_path: str,
 
     # ── 标定：只用圆形检测（ratio <= 1.4 且 conf >= min_conf）──
     ASPECT_RATIO_THRESH_FOR_SCALE = 1.4
-    ratio_safe = np.where(
-        (widths > 0) & (heights > 0),
-        np.maximum(widths, heights) / np.minimum(widths, heights),
-        999.0
-    )
-    np.copyto(ratio_safe, 999.0, where=(widths == 0) | (heights == 0))
+    ratio_safe = np.full_like(widths, 999.0)
+    pos = (widths > 0) & (heights > 0)
+    ratio_safe[pos] = np.maximum(widths[pos], heights[pos]) / np.minimum(widths[pos], heights[pos])
     circular_for_scale = (
         (ratio_safe <= ASPECT_RATIO_THRESH_FOR_SCALE) &
         (confs_arr >= min_conf) &
@@ -505,13 +518,25 @@ def _parse_video_associator(video_path: str,
     circ_heights = heights[circular_for_scale]
 
     if len(circ_heights) > 5:
-        scale, _ = calibrate_scale(circ_heights.tolist(), plate_diameter_m)
+        scale, _ = calibrate_scale(circ_heights.tolist(), plate_diameter_m,
+                                   scale_factor=scale_factor)
     else:
         valid_heights = heights[~np.isnan(y_arr) & (heights > 0)]
         if len(valid_heights) > 5:
-            scale, _ = calibrate_scale(valid_heights.tolist(), plate_diameter_m)
+            scale, _ = calibrate_scale(valid_heights.tolist(), plate_diameter_m,
+                                       scale_factor=scale_factor)
         else:
-            scale = 0.001
+            scale = 0.0
+
+    if traces is not None:
+        traces.update({
+            'fps': fps,
+            'n_frames': n_frames,
+            'confs': confs_arr,
+            'widths': widths,
+            'heights': heights,
+            'ratios': ratios_arr,
+        })
 
     return t_arr, y_arr, state_arr, fps, scale, assoc
 
@@ -520,10 +545,16 @@ def _parse_video_associator(video_path: str,
 #  Pipeline 1-4（保持原样，作为对比基准）
 # ══════════════════════════════════════════════════════════════
 
-def pipeline_baseline_sg(video_path: str) -> list[dict]:
+def pipeline_baseline_sg(video_path: str,
+                         model_path: str | None = None,
+                         scale_factor: float = 1.0,
+                         conf_threshold: float = 0.25,
+                         **kwargs) -> list[dict]:
     """稀疏 YOLO(每10帧) + DBSCAN过滤 + SG(15,3)"""
-    t_arr, y_arr, fps, scale = _parse_video(video_path, use_subpixel=False)
-    if len(y_arr) < 30 or scale < 1e-5:
+    t_arr, y_arr, fps, scale = _parse_video(
+        video_path, use_subpixel=False,
+        model_path=model_path, scale_factor=scale_factor, conf_threshold=conf_threshold)
+    if len(y_arr) < 30 or scale <= 0:
         return []
     v_raw = -np.gradient(y_arr, 1.0 / fps) * scale
     window = min(15, len(y_arr) - 1)
@@ -534,20 +565,32 @@ def pipeline_baseline_sg(video_path: str) -> list[dict]:
     return segment_reps(y_arr, v_filt, fps, scale)
 
 
-def pipeline_subpixel_spline(video_path: str) -> list[dict]:
+def pipeline_subpixel_spline(video_path: str,
+                             model_path: str | None = None,
+                             scale_factor: float = 1.0,
+                             conf_threshold: float = 0.25,
+                             **kwargs) -> list[dict]:
     """稀疏 YOLO(每10帧) + 亚像素精修 + Reinsch 三次样条"""
-    t_arr, y_arr, fps, scale = _parse_video(video_path, use_subpixel=True)
-    if len(y_arr) < 30 or scale < 1e-5:
+    t_arr, y_arr, fps, scale = _parse_video(
+        video_path, use_subpixel=True,
+        model_path=model_path, scale_factor=scale_factor, conf_threshold=conf_threshold)
+    if len(y_arr) < 30 or scale <= 0:
         return []
     spl = UnivariateSpline(t_arr, y_arr, k=3, s=len(y_arr) * 0.5)
     v_spline = -spl.derivative()(t_arr) * scale
     return segment_reps(y_arr, v_spline, fps, scale)
 
 
-def pipeline_kalman_sg(video_path: str) -> list[dict]:
+def pipeline_kalman_sg(video_path: str,
+                       model_path: str | None = None,
+                       scale_factor: float = 1.0,
+                       conf_threshold: float = 0.25,
+                       **kwargs) -> list[dict]:
     """稀疏 YOLO(每10帧) + 亚像素精修 + 一阶 Kalman + SG(11,2)"""
-    t_arr, y_arr, fps, scale = _parse_video(video_path, use_subpixel=True)
-    if len(y_arr) < 30 or scale < 1e-5:
+    t_arr, y_arr, fps, scale = _parse_video(
+        video_path, use_subpixel=True,
+        model_path=model_path, scale_factor=scale_factor, conf_threshold=conf_threshold)
+    if len(y_arr) < 30 or scale <= 0:
         return []
     v_raw = -np.gradient(y_arr, 1.0 / fps) * scale
     v_kalman = np.zeros_like(v_raw)
@@ -568,10 +611,16 @@ def pipeline_kalman_sg(video_path: str) -> list[dict]:
     return segment_reps(y_arr, v_filt, fps, scale)
 
 
-def pipeline_global_smoothing(video_path: str) -> list[dict]:
+def pipeline_global_smoothing(video_path: str,
+                              model_path: str | None = None,
+                              scale_factor: float = 1.0,
+                              conf_threshold: float = 0.25,
+                              **kwargs) -> list[dict]:
     """稀疏 YOLO(每10帧) + 亚像素精修 + 全局 k=4 样条（s=0.2·n）"""
-    t_arr, y_arr, fps, scale = _parse_video(video_path, use_subpixel=True)
-    if len(y_arr) < 30 or scale < 1e-5:
+    t_arr, y_arr, fps, scale = _parse_video(
+        video_path, use_subpixel=True,
+        model_path=model_path, scale_factor=scale_factor, conf_threshold=conf_threshold)
+    if len(y_arr) < 30 or scale <= 0:
         return []
     n = len(y_arr)
     spl = UnivariateSpline(t_arr, y_arr, k=4, s=n * 0.2)
@@ -587,13 +636,26 @@ def pipeline_associator(video_path: str,
                         plate_diameter_m: float = 0.45,
                         dist_threshold_px: float = 400.0,
                         lost_timeout_ms: float = 500.0,
+                        model_path: str | None = None,
+                        scale_factor: float = 1.0,
+                        conf_threshold: float = 0.25,
+                        verbose: bool = False,
+                        traces: dict | None = None,
                         ) -> dict:
     """
     全帧检测 + TargetAssociator + 圆形检测标定。
 
     返回 dict:
       reps:        list[dict] — 检测到的 reps
-      diagnostics: dict — 覆盖率/gap 分析
+      diagnostics: dict — 覆盖率/gap 分析 / scale
+
+    参数
+    ----
+    model_path     : ONNX 模型路径（None -> config 默认模型）
+    scale_factor   : 标定修正系数（默认 1.0）
+    conf_threshold : 检测置信度阈值
+    verbose        : 打印逐视频覆盖率
+    traces         : 若传入 dict，写入逐帧 conf/width/height/ratio
 
     架构（专家B）:
       Layer 0: YOLO 全帧检测
@@ -606,18 +668,25 @@ def pipeline_associator(video_path: str,
         plate_diameter_m=plate_diameter_m,
         dist_threshold_px=dist_threshold_px,
         lost_timeout_ms=lost_timeout_ms,
+        model_path=model_path,
+        scale_factor=scale_factor,
+        conf_threshold=conf_threshold,
+        traces=traces,
     )
 
     # ── 检测覆盖率报告 ────────────────────────────────
     tracking_mask = (state_arr == 'TRACKING') | (state_arr == 'RECOVERED')
     lost_mask = state_arr == 'LOST'
     anchoring_mask = (state_arr == 'ANCHORING') | (state_arr == 'DRIFTED')
-    coverage = tracking_mask.sum() / len(state_arr)
-    print(f"  [associator] 覆盖率: {coverage*100:.0f}%  "
-          f"TRACK={tracking_mask.sum()} LOST={lost_mask.sum()} ANCHOR={anchoring_mask.sum()}")
+    coverage = int(tracking_mask.sum()) / len(state_arr) if len(state_arr) else 0.0
+    if verbose:
+        print(f"  [associator] 覆盖率: {coverage*100:.0f}%  "
+              f"TRACK={tracking_mask.sum()} LOST={lost_mask.sum()} ANCHOR={anchoring_mask.sum()}")
 
-    if len(y_arr) < 30 or scale < 1e-5:
-        return {'reps': [], 'diagnostics': {'coverage': coverage, 'scale': scale}}
+    if len(y_arr) < 30 or scale <= 0:
+        return {'reps': [],
+                'diagnostics': {'coverage': coverage, 'scale': scale,
+                                'scale_factor': scale_factor}}
 
     # ── α-β 跟踪器：外推 1-3 帧短时丢失 ───────────────
     # 不做跨大 gap 的插值，只在 LOST 1-3 帧时用匀速外推
@@ -690,6 +759,8 @@ def pipeline_associator(video_path: str,
     diagnostics = {
         'coverage': coverage,
         'scale': scale,
+        'scale_factor': scale_factor,
+        'n_frames': int(len(state_arr)),
         'n_tracking': int(tracking_mask.sum()),
         'n_lost': int(lost_mask.sum()),
         'n_anchoring': int(anchoring_mask.sum()),

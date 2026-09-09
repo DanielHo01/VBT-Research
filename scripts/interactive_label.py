@@ -15,11 +15,15 @@ import os
 os.environ['HF_HUB_OFFLINE'] = '1'
 os.environ['TRANSFORMERS_OFFLINE'] = '1'
 
-import cv2, numpy as np, torch, json, time, argparse
+import cv2, numpy as np, torch, json, time, argparse, sys
+from pathlib import Path
 from transformers import OwlViTForObjectDetection, AutoImageProcessor, AutoTokenizer
 
-VIDEO_DIR = r'D:\EasyVBT-Research\validation\dataset_benchmark\raw_videos'
-OUTPUT_DIR = r'D:\EasyVBT-Research\datasets\interactive_labels'
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'validation' / 'dataset_benchmark'))
+import config as cfg
+
+VIDEO_DIR = str(cfg.raw_videos_dir())
+OUTPUT_DIR = str(cfg.datasets_dir() / 'interactive_labels')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 TEXTS = [
@@ -316,8 +320,15 @@ def preview_video(videopath, videoname, frame_step=20, max_frames=30):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--preview', action='store_true', help='Preview mode (no GUI)')
+    parser.add_argument('--videos-dir', default=VIDEO_DIR,
+                        help='原始视频目录（默认 config 解析，可用 VBT_VIDEOS_DIR 覆盖）')
+    parser.add_argument('--output-dir', default=OUTPUT_DIR,
+                        help='标注输出目录（默认 datasets/interactive_labels）')
     parser.add_argument('video', nargs='?', help='Video filename (e.g. 20kg_0.87_0.88_0.89_0.91.mp4)')
     args = parser.parse_args()
+    VIDEO_DIR = args.videos_dir
+    OUTPUT_DIR = args.output_dir
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     videos = sorted([f for f in os.listdir(VIDEO_DIR) if f.endswith('.mp4')])
 

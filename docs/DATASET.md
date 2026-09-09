@@ -172,9 +172,9 @@ test:   564 张 (10%)   ← 训练后最终评估
     └── test/{images,labels}/
 ```
 
-**YAML 格式**（单类版）：
+**YAML 格式**（单类版，path 用仓库相对路径或本地绝对路径均可）：
 ```yaml
-path: D:/EasyVBT-Research/datasets/final
+path: ./datasets/final
 train: train/images
 val: val/images
 test: test/images
