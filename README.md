@@ -35,6 +35,12 @@ python3 scripts/diagnose_benchmark.py
 python3 validation/dataset_benchmark/run_benchmark.py
 ```
 
+**一条龙（推荐，Windows Git Bash 亦可用）**：自动装依赖、从 Release `v1.0-videos`
+下载视频（一次性）、自检、跑基准、出诊断：
+```bash
+bash scripts/run_local_validation.sh
+```
+
 所有脚本路径默认相对仓库根目录解析（`validation/dataset_benchmark/config.py`），
 可用环境变量覆盖：`VBT_MODEL_PATH` / `VBT_VIDEOS_DIR` / `VBT_INDEX_PATH` / `VBT_OUTPUT_DIR`。
 
