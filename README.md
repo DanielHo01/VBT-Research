@@ -65,7 +65,7 @@ validation/            # 34 benchmark videos + ground truth
 ## Models
 
 | Model | RMSE (MCV) | Notes |
-|-------|-------------|-------|
+| ------- | ------------- | ------- |
 | `barbell_v4.onnx` | **0.88** | Best — production use |
 | `yolo11_plate.onnx` | ? | Untested — needs benchmark |
 | `plate_v1.onnx` | ~1.4 | Poor on side-view |
