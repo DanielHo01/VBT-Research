@@ -102,11 +102,16 @@ class YoloPlateDetector:
 
         boxes = []
         for i in order:
+            vals = [float(row[c][i] * s) for c, s in
+                    zip(range(4), [sx, sy, sx, sy])]
+            # 防御：非有限坐标直接丢弃（YOLO 异常输出的 NaN/inf 会污染轨迹）
+            if not all(np.isfinite(v) for v in vals) or vals[2] <= 0 or vals[3] <= 0:
+                continue
             boxes.append({
-                'cx': float(row[0][i] * sx),
-                'cy': float(row[1][i] * sy),
-                'w':  float(row[2][i] * sx),
-                'h':  float(row[3][i] * sy),
+                'cx': vals[0],
+                'cy': vals[1],
+                'w':  vals[2],
+                'h':  vals[3],
                 'score': float(confs[i]),
             })
 

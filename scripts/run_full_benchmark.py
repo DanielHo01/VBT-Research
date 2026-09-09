@@ -143,9 +143,40 @@ def main() -> int:
             ev = MetricsEvaluator.evaluate_video(vid, gt, reps, strategy='truncate')
             ev_best = MetricsEvaluator.evaluate_video(vid, gt, reps, strategy='best_pair')
             scale = diag.get('scale', 0.0)
+            coverage = diag.get('coverage', 0.0)
         except Exception as e:
             print(f"  ✗ {vid}  ERROR: {e}")
-            video_results.append({'video_id': vid, 'error': str(e)})
+            video_results.append({'video_id': vid, 'error': str(e),
+                                  'status': 'ERROR'})
+            continue
+
+        # ── 无片/无法标定：这类视频从 measurement 上就不满足 plate 标定
+        #    条件（如 20kg 空杆无片、或 plate 被完全遮挡），不计入 RMSE，
+        #    避免旧版“垃圾检测碰运气”产生的虚高数字。 ────────────────
+        if scale <= 0 or coverage < 0.10:
+            status = 'NO_PLATE_UNCALIBRATED'
+            print(f"  ⚠ {vid:<44} {status}  "
+                  f"coverage={coverage*100:3.0f}%  scale={scale:.6f}  "
+                  f"(标定失败: 未检测到可标定的杠铃片)")
+            video_results.append({
+                'video_id': vid, 'load_kg': it.get('load_kg'),
+                'n_gt': len(gt), 'n_pred': len(reps),
+                'status': status, 'coverage': coverage, 'scale': scale,
+                'diagnostics': diag,
+            })
+            continue
+
+        # 标定成功但没分到 rep：明确列为 NO_REPS，不计 RMSE
+        if not reps:
+            status = 'NO_REPS'
+            print(f"  ⚠ {vid:<44} {status}  (标定成功 scale={scale:.6f}, "
+                  f"但未分割出 rep)")
+            video_results.append({
+                'video_id': vid, 'load_kg': it.get('load_kg'),
+                'n_gt': len(gt), 'n_pred': 0,
+                'status': status, 'coverage': coverage, 'scale': scale,
+                'diagnostics': diag,
+            })
             continue
 
         n_pair = ev.n_paired
@@ -157,7 +188,9 @@ def main() -> int:
         video_results.append({
             'video_id': vid,
             'load_kg': it.get('load_kg'),
+            'status': 'OK',
             'n_gt': len(gt), 'n_pred': ev.n_pred,
+            'coverage': coverage, 'scale': scale,
             'rmse_truncate': None if np.isnan(ev.rmse) else ev.rmse,
             'bias_truncate': None if np.isnan(ev.bias) else ev.bias,
             'rmse_best_pair': None if np.isnan(ev_best.rmse) else ev_best.rmse,
@@ -179,19 +212,31 @@ def main() -> int:
     elapsed = time.time() - t0
 
     # ── 汇总 ────────────────────────────────────────────────
-    errs = [v['rmse_truncate'] for v in video_results
+    eval_ok = [v for v in video_results if v.get('status') == 'OK']
+    no_plate = [v for v in video_results if v.get('status') == 'NO_PLATE_UNCALIBRATED']
+    errors = [v for v in video_results if v.get('status') == 'ERROR']
+    errs = [v['rmse_truncate'] for v in eval_ok
             if v.get('rmse_truncate') is not None]
     valid = len(errs)
     print()
     print("=" * 72)
     print(f"  汇总（{elapsed:.1f}s）")
     print("=" * 72)
+
+    print(f"  可测量（有片、已标定）: {len(eval_ok)}/{len(video_results)}  "
+          f"  无片/无法标定: {len(no_plate)}  错误: {len(errors)}")
+    if no_plate:
+        print("\n  ⚠ 无片/无法标定（不计入 RMSE，需人工或换片拍摄）:")
+        for v in no_plate:
+            print(f"    {v['video_id']:<44} coverage={v['coverage']*100:3.0f}%")
+
     if valid == 0:
-        print("  没有任何可评估视频（无预测或无视频）。")
+        print("  没有可评估视频（无片或无法标定）。")
         return 1
 
     errs = np.array(errs)
-    print(f"  可评估视频: {valid}/{len(video_results)}")
+    print(f"\n  可评估视频: {valid}/{len(video_results)}  "
+          f"(其余为无片/无法标定)")
     print(f"  RMSE mean   = {errs.mean():.4f} m/s")
     print(f"  RMSE median = {np.median(errs):.4f} m/s")
     print(f"  全部配对 rep 数: {len(rows_rep)}")
@@ -201,12 +246,12 @@ def main() -> int:
         print(f"  通过率 (视频级 RMSE ≤ {tier:.2f}): {n_pass}/{valid} ({n_pass/valid*100:.0f}%)")
 
     # rep 数量完全匹配的视频
-    exact = sum(1 for v in video_results
+    exact = sum(1 for v in eval_ok
                 if v.get('n_gt') == v.get('n_pred'))
-    print(f"  rep 数量完全匹配: {exact}/{len(video_results)}")
+    print(f"  rep 数量完全匹配: {exact}/{len(eval_ok)}")
 
     # 最差视频
-    worst = sorted([v for v in video_results if v.get('rmse_truncate') is not None],
+    worst = sorted([v for v in eval_ok if v.get('rmse_truncate') is not None],
                    key=lambda v: -v['rmse_truncate'])[:5]
     if worst:
         print("\n  最差视频（优先后续诊断）:")
@@ -225,6 +270,9 @@ def main() -> int:
         'conf_threshold': args.conf_threshold,
         'videos_dir': str(videos_dir),
         'n_videos': len(dataset),
+        'n_ok': len(eval_ok),
+        'n_no_plate': len(no_plate),
+        'n_error': len(errors),
         'elapsed_s': round(elapsed, 1),
         'rmse_mean': float(errs.mean()),
         'rmse_median': float(np.median(errs)),

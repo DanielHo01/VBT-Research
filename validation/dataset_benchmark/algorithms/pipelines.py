@@ -247,6 +247,41 @@ def _filter_barbell_cluster(ys_raw: np.ndarray,
 
 
 # ══════════════════════════════════════════════════════════════
+#  轨迹清理（NaN/inf 防御）
+# ══════════════════════════════════════════════════════════════
+
+def _sanitize_track(arr: np.ndarray) -> np.ndarray:
+    """
+    把非有限值（NaN / inf）线性插值/前向后向填充为有限值。
+
+    - 前后都有有效点 -> 线性插值
+    - 仅在末尾 -> 用最后一个有效点
+    - 仅在开头 -> 用第一个有效点
+    - 全部无效 -> 全 0（调用方会有 scale<=0 检查兜底）
+    """
+    arr = np.asarray(arr, dtype=float)
+    valid = np.isfinite(arr)
+    if valid.all():
+        return arr.copy()
+    if not valid.any():
+        return np.zeros_like(arr)
+
+    out = arr.copy()
+    vidx = np.where(valid)[0]
+    for i in np.where(~valid)[0]:
+        left = vidx[vidx < i]
+        right = vidx[vidx > i]
+        if len(left) and len(right):
+            a = (i - left[-1]) / (right[0] - left[-1])
+            out[i] = out[left[-1]] + a * (out[right[0]] - out[left[-1]])
+        elif len(left):
+            out[i] = out[left[-1]]
+        else:
+            out[i] = out[right[0]]
+    return out
+
+
+# ══════════════════════════════════════════════════════════════
 #  视频解析
 # ══════════════════════════════════════════════════════════════
 
@@ -335,19 +370,8 @@ def _parse_video(video_path: str,
     ys_full = np.full(n_frames, np.nan)
     ys_full[valid_mask] = ys_filtered
 
-    # 线性插值填充（小 gap）
-    valid_idx = np.where(~np.isnan(ys_full))[0]
-    nan_idx   = np.where( np.isnan(ys_full))[0]
-    for i in nan_idx:
-        left  = valid_idx[valid_idx < i]
-        right = valid_idx[valid_idx > i]
-        if len(left) and len(right):
-            alpha = (i - left[-1]) / (right[0] - left[-1])
-            ys_full[i] = ys_full[left[-1]] + alpha * (ys_full[right[0]] - ys_full[left[-1]])
-        elif len(left):
-            ys_full[i] = ys_full[left[-1]]
-        elif len(right):
-            ys_full[i] = ys_full[right[0]]
+    # 线性插值填充非有限值（NaN/inf 防御）
+    ys_full = _sanitize_track(ys_full)
 
     ys_full = median_filter(ys_full, size=3)
     w5 = min(5, len(ys_full) - 1)
@@ -484,18 +508,7 @@ def _parse_video_associator(video_path: str,
     # ── 无 DBSCAN：associator 本身做目标关联 ─────────────────
     # 专家B：associator 用距离门控选目标，DBSCAN 改为只在标定环节过滤
     # 用 3-frame 中值 + SG 平滑（不加 DBSCAN）
-    valid_idx = np.where(~np.isnan(y_arr))[0]
-    nan_idx   = np.where( np.isnan(y_arr))[0]
-    for i in nan_idx:
-        left  = valid_idx[valid_idx < i]
-        right = valid_idx[valid_idx > i]
-        if len(left) and len(right):
-            alpha = (i - left[-1]) / (right[0] - left[-1])
-            y_arr[i] = y_arr[left[-1]] + alpha * (y_arr[right[0]] - y_arr[left[-1]])
-        elif len(left):
-            y_arr[i] = y_arr[left[-1]]
-        elif len(right):
-            y_arr[i] = y_arr[right[0]]
+    y_arr = _sanitize_track(y_arr)
 
     # 3-frame 中值 + SG 平滑
     y_arr = median_filter(y_arr, size=3)
@@ -510,10 +523,11 @@ def _parse_video_associator(video_path: str,
     ratio_safe = np.full_like(widths, 999.0)
     pos = (widths > 0) & (heights > 0)
     ratio_safe[pos] = np.maximum(widths[pos], heights[pos]) / np.minimum(widths[pos], heights[pos])
+    valid_track = np.isfinite(y_arr)
     circular_for_scale = (
         (ratio_safe <= ASPECT_RATIO_THRESH_FOR_SCALE) &
         (confs_arr >= min_conf) &
-        ~np.isnan(y_arr)
+        valid_track
     )
     circ_heights = heights[circular_for_scale]
 
@@ -521,7 +535,7 @@ def _parse_video_associator(video_path: str,
         scale, _ = calibrate_scale(circ_heights.tolist(), plate_diameter_m,
                                    scale_factor=scale_factor)
     else:
-        valid_heights = heights[~np.isnan(y_arr) & (heights > 0)]
+        valid_heights = heights[valid_track & (heights > 0)]
         if len(valid_heights) > 5:
             scale, _ = calibrate_scale(valid_heights.tolist(), plate_diameter_m,
                                        scale_factor=scale_factor)
@@ -691,36 +705,25 @@ def pipeline_associator(video_path: str,
     # ── α-β 跟踪器：外推 1-3 帧短时丢失 ───────────────
     # 不做跨大 gap 的插值，只在 LOST 1-3 帧时用匀速外推
     y_out = np.copy(y_arr)
-    nan_mask = np.isnan(y_arr)
+    finite_mask = np.isfinite(y_arr)
     v_est = 0.0
     last_valid = np.nan
 
     for i in range(len(y_arr)):
-        if not nan_mask[i]:
-            if not np.isnan(last_valid):
+        if finite_mask[i]:
+            if np.isfinite(last_valid):
                 v_est = y_arr[i] - last_valid
             last_valid = y_arr[i]
         else:
             # 匀速外推（最多 3 帧）
             for delta in range(1, 4):
-                if i - delta >= 0 and not nan_mask[i - delta]:
+                if i - delta >= 0 and finite_mask[i - delta]:
                     predicted = y_arr[i - delta] + v_est * delta
                     y_out[i] = predicted
                     break
 
-    # 剩余 NaN 用线性插值填充（仅小 gap）
-    valid_idx = np.where(~np.isnan(y_out))[0]
-    nan_idx = np.where(np.isnan(y_out))[0]
-    for i in nan_idx:
-        left  = valid_idx[valid_idx < i]
-        right = valid_idx[valid_idx > i]
-        if len(left) and len(right):
-            alpha = (i - left[-1]) / (right[0] - left[-1])
-            y_out[i] = y_out[left[-1]] + alpha * (y_out[right[0]] - y_out[left[-1]])
-        elif len(left):
-            y_out[i] = y_out[left[-1]]
-        elif len(right):
-            y_out[i] = y_out[right[0]]
+    # 剩余非有限值用线性插值填充
+    y_out = _sanitize_track(y_out)
 
     # 3-frame 中值 + SG 平滑
     y_out = median_filter(y_out, size=3)
