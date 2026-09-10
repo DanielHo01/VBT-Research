@@ -20,6 +20,7 @@ import numpy as np
 
 from .detector import PlateDetector
 from .engine import DetectFitTracker, TrackDiagnostics
+from .geometry import resolve_plate_diameter
 from .segment import Rep, SegmentResult, segment_reps
 
 
@@ -48,13 +49,20 @@ def analyze_video(video_path: str,
                   redet_every: int = 15,
                   user_hint: tuple[float, float] | None = None,
                   plate_diameter_m: float = 0.45,
+                  outer_plate: str | None = None,
+                  regrind_enabled: bool = True,
                   detector: PlateDetector | None = None) -> SetResult:
-    """单视频 → SetResult。detector 可复用以省模型加载时间。"""
+    """单视频 → SetResult。detector 可复用以省模型加载时间。
+    outer_plate（如 "20kg"）提供时按查表覆盖 plate_diameter_m（M1.5）。
+    regrind_enabled=False 关闭底部重锚定（烧蚀实验用）。"""
     det = detector or PlateDetector(model_path)
+    diameter = (resolve_plate_diameter(outer_plate) if outer_plate
+                else plate_diameter_m)
     tracker = DetectFitTracker(
         det, redet_every=redet_every,
-        plate_diameter_m=plate_diameter_m,
+        plate_diameter_m=diameter,
         user_hint=user_hint,
+        regrind_enabled=regrind_enabled,
     )
 
     cap = cv2.VideoCapture(video_path)
@@ -80,6 +88,12 @@ def analyze_video(video_path: str,
             "anchor_frame": diag.anchor_frame,
             "anchor_h_px": round(diag.anchor_h_px, 1),
             "elapsed_s": round(diag.elapsed_s, 1),
+            "plate_diameter_m": diameter,
+            "outer_plate": outer_plate,
+            "notes": diag.notes,
+            "n_regrind_snap": diag.n_regrind_snap,
+            "n_regrind_micro": diag.n_regrind_micro,
+            "n_regrind_reject": diag.n_regrind_reject,
         },
     )
 

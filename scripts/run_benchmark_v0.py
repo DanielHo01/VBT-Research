@@ -2,10 +2,10 @@
 run_benchmark_v0.py — M0 基线报告（34 视频 GymAware 基准）
 ==========================================================
 用法:
-    cd /home/user/VBT-Research && python3 scripts/run_benchmark_v0.py
+    cd /home/user/VBT-Research && python3 scripts/run_benchmark_v0.py [--tag v1] [--only 50kg,105kg] [--engine LABEL]
 
 产出:
-    validation/reports/BENCHMARK_v0.md / .json
+    validation/reports/BENCHMARK_{tag}.md / .json（默认 tag=v0，保持 M0 行为）
 
 评估口径（Stage 0/1）:
   - rep 计数: |n_pred - n_gt| <= 1 计为通过（±1 容差）
@@ -14,6 +14,7 @@ run_benchmark_v0.py — M0 基线报告（34 视频 GymAware 基准）
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
@@ -37,9 +38,25 @@ BAR_ONLY = {"20kg_0.87_0.88_0.89_0.91.mp4"}
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tag", default="v0",
+                    help="报告后缀：输出 BENCHMARK_{tag}.md/json")
+    ap.add_argument("--only", default=None,
+                    help="只跑文件名包含任一子串的视频（逗号分隔），如 --only 50kg,105kg_0.69")
+    ap.add_argument("--engine", default="vbtcore v1 (detect->fit hybrid, M0)",
+                    help="报告中的引擎标识")
+    ap.add_argument("--no-regrind", action="store_true",
+                    help="关闭 M1.5 底部重锚定（烧蚀实验）")
+    args = ap.parse_args()
+
     with open(BENCH / "dataset_index.json") as f:
         dataset = json.load(f)
-    print(f"共 {len(dataset)} 个视频 | 模型: {Path(MODEL).name}")
+    if args.only:
+        subs = [s.strip() for s in args.only.split(",") if s.strip()]
+        dataset = [d for d in dataset
+                   if any(s in d["video_id"] for s in subs)]
+        print(f"--only {subs} → {len(dataset)} 个视频")
+    print(f"共 {len(dataset)} 个视频 | 模型: {Path(MODEL).name} | tag={args.tag}")
     det = PlateDetector(MODEL)
 
     rows = []
@@ -48,7 +65,8 @@ def main():
         vid = item["video_id"]
         gt = item["gt_reps_mcv"]
         vp = str(BENCH / "raw_videos" / vid)
-        r = analyze_video(vp, MODEL, detector=det)
+        r = analyze_video(vp, MODEL, detector=det,
+                          regrind_enabled=not args.no_regrind)
         row = {
             "video": vid, "load_kg": item.get("load_kg"),
             "status": r.status, "n_gt": len(gt), "n_pred": len(r.mcv),
@@ -76,6 +94,9 @@ def main():
         row["ms_per_frame"] = r.diagnostics.get("ms_per_frame")
         row["coverage"] = r.diagnostics.get("coverage")
         row["yolo_ratio"] = r.diagnostics.get("yolo_ratio")
+        row["regrind"] = [r.diagnostics.get("n_regrind_snap", 0),
+                          r.diagnostics.get("n_regrind_micro", 0),
+                          r.diagnostics.get("n_regrind_reject", 0)]
         rows.append(row)
         print(f"[{k+1:>2}/{len(dataset)}] {vid:<44} status={r.status:<18} "
               f"reps {row['n_pred']}/{row['n_gt']}  "
@@ -108,11 +129,15 @@ def main():
         # 从 rows 里保存的 n_pred 不足以算 rep 级，需要再跑一次？——不，
         # 改为在循环里就收集。见下方（二次遍历代价高），此处用 rep 级重算。
     spd = [r["ms_per_frame"] for r in rows if r.get("ms_per_frame")]
+    rg_tot = [sum(r["regrind"][i] for r in rows) for i in range(3)]
 
     report = {
         "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
         "model": Path(MODEL).name,
-        "engine": "vbtcore v1 (detect->fit hybrid, M0)",
+        "engine": args.engine,
+        "tag": args.tag,
+        "only": args.only,
+        "regrind": not args.no_regrind,
         "total_minutes": round(total_min, 1),
         "n_videos": n,
         "status_counts": by_status,
@@ -121,16 +146,18 @@ def main():
         "video_rmse_mean": round(float(np.mean(rmse_all)), 3) if rmse_all else None,
         "video_rmse_median": round(float(np.median(rmse_all)), 3) if rmse_all else None,
         "ms_per_frame_mean": round(float(np.mean(spd)), 1) if spd else None,
+        "regrind_totals": {"snap": rg_tot[0], "micro": rg_tot[1],
+                           "reject": rg_tot[2]},
         "rows": rows,
     }
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    (REPORT_DIR / "BENCHMARK_v0.json").write_text(
+    (REPORT_DIR / f"BENCHMARK_{args.tag}.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False))
 
     # ── Markdown ─────────────────────────────────────────
     lines = [
-        "# Benchmark v0 — vbtcore 引擎基线（M0）",
+        f"# Benchmark {args.tag} — {args.engine}",
         "",
         f"- 生成: {report['generated']} ｜ 引擎: {report['engine']}",
         f"- 视频: {n} ｜ 状态分布: {by_status}",
@@ -141,17 +168,20 @@ def main():
         f"中位数: {report['video_rmse_median']}",
         f"- 平均速度: {report['ms_per_frame_mean']} ms/帧（CPU ONNX）",
         f"- 总耗时: {total_min:.1f} 分钟",
+        f"- regrind 触发统计(snap/微偏/拒绝): "
+        f"{rg_tot[0]}/{rg_tot[1]}/{rg_tot[2]}",
         "",
-        "| 视频 | 负荷 | 状态 | reps(pred/gt) | RMSE | bias | r | ms/帧 |",
-        "|---|---|---|---|---|---|---|---|",
+        "| 视频 | 负荷 | 状态 | reps(pred/gt) | RMSE | bias | r | ms/帧 | regrind |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         lines.append(
             f"| {r['video']} | {r['load_kg']} | {r['status']} "
             f"| {r['n_pred']}/{r['n_gt']} | {r.get('rmse','-')} "
-            f"| {r.get('bias','-')} | {r.get('r','-')} | {r.get('ms_per_frame','-')} |")
-    (REPORT_DIR / "BENCHMARK_v0.md").write_text("\n".join(lines), encoding="utf-8")
-    print(f"\n报告: {REPORT_DIR/'BENCHMARK_v0.md'}")
+            f"| {r.get('bias','-')} | {r.get('r','-')} | {r.get('ms_per_frame','-')} "
+            f"| {'/'.join(str(x) for x in r['regrind'])} |")
+    (REPORT_DIR / f"BENCHMARK_{args.tag}.md").write_text("\n".join(lines), encoding="utf-8")
+    print(f"\n报告: {REPORT_DIR/f'BENCHMARK_{args.tag}.md'}")
     print(f"计数通过: {count_ok}/{n} | 配对视频 RMSE 均值 {report['video_rmse_mean']} "
           f"| {report['ms_per_frame_mean']} ms/帧")
 
