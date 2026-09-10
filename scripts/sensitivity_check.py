@@ -42,6 +42,10 @@ SWEEPS = {
     # 跟踪层（需重跑，慢）
     "hold_max_frames": {"values": [25, 40, 55], "layer": "track"},
     "max_step_factor": {"values": [0.20, 0.25, 0.35], "layer": "track"},
+    # M1.5 regrind（只扫偏离值，省算力；基准 = 默认参数已缓存）
+    "regrind_enabled": {"values": [False], "layer": "track"},
+    "regrind_arm_disp": {"values": [1.0, 2.0], "layer": "track"},
+    "regrind_min_correction": {"values": [0.1, 0.35], "layer": "track"},
 }
 
 

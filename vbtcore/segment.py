@@ -2,10 +2,16 @@
 vbtcore.segment — rep 分段与指标结算
 ====================================
 MCV 定义（本引擎统一，与 GymAware 对齐）：
-  MCV = 向心段（bottom→top）平均正速度   ← 主指标
+  MCV = 向心段（bottom→top）全程平均速度（= ROM/duration 的伸缩求和）← 主指标
+  mcv_pos = 向心段平均正速度            ← 诊断（M1.5 前的主指标，已降级）
   mcv_mid = 向心段中点瞬时速度           ← 仅诊断用（旧 AnchorTemplateEngine 定义）
   PV    = 向心段速度峰值
   ROM   = bottom→top 位移（米）
+
+M1.5 口径修正依据：TroyKaneshiro/barbell-velocity-tracker METHODOLOGY.md
+实证——GymAware ACV 是全程 plain mean；只平均正速度/最快窗口会系统性
+高估 MCV。本仓库最差的两条视频（110kg_0.45_0.31 bias=+0.97、
+110kg_0.57_0.55 bias=+0.55）均为 +bias，与该机制一致。
 
 历史不一致（已消除）：两套旧引擎分别用 mean 与 mid 定义，
 标定系数一个乘 1.15 一个不乘——同一仓库两把尺子。
@@ -22,11 +28,12 @@ from scipy.signal import savgol_filter, find_peaks
 class Rep:
     start_frame: int
     end_frame: int
-    mcv: float            # 向心段平均正速度 m/s（主指标）
+    mcv: float            # 向心段全程平均速度 m/s（主指标，M1.5 起）
     mcv_mid: float        # 中点瞬时速度 m/s（诊断）
     pv: float             # 峰值速度 m/s
     rom_m: float          # 米
     duration_s: float
+    mcv_pos: float = 0.0  # 向心段平均正速度 m/s（诊断，M1.5 前的主指标）
     clipped: bool = False # 速度触 sanity 界（诊断）
 
 
@@ -169,13 +176,16 @@ def segment_reps(y_track: np.ndarray, fps: float, mpp: float,
             rom = abs(y_s[f2] - y_s[f1]) * mpp
             if dur_min <= dur <= dur_max and rom >= rom_min_m:
                 seg_v = v[f1:f2 + 1]
-                pos_v = seg_v[seg_v > 0]
                 mid = int(np.clip((f1 + f2) // 2, 0, len(v) - 1))
-                mcv = float(np.mean(pos_v)) if len(pos_v) else 0.0
+                # M1.5：全程平均（GymAware ACV 口径）；旧平均正速度保留为诊断
+                mcv = float(np.mean(seg_v)) if len(seg_v) else 0.0
+                pos_v = seg_v[seg_v > 0]
+                mcv_pos = float(np.mean(pos_v)) if len(pos_v) else 0.0
                 clipped = not (v_sanity[0] <= mcv <= v_sanity[1])
                 reps.append(Rep(
                     start_frame=a + f1, end_frame=a + f2,
                     mcv=round(mcv, 3),
+                    mcv_pos=round(mcv_pos, 3),
                     mcv_mid=round(float(np.clip(v[mid], *v_sanity)), 3),
                     pv=round(float(np.max(seg_v)) if len(seg_v) else 0.0, 3),
                     rom_m=round(rom, 4),
