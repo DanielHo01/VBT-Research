@@ -10,6 +10,31 @@ Vertical Bar tracking research — a computer vision pipeline for estimating bar
 
 **Phase 2 🔲** — Not yet started.
 
+## vbtcore — 新引擎（M0）
+
+> 2026-09-10 起的规范化引擎，修复了旧脚本的四类历史 bug（详见各模块 docstring）：
+> 竖屏旋转逆映射镜像错误、置信度双重 sigmoid、直 resize 挤压畸变、
+> 魔法标定系数 scale_factor=1.15。
+
+```bash
+# 单元测试（13+ 用例，锁定已修 bug）
+PYTHONPATH=<deps> python3 -c "import sys; sys.path[:0]=['tests']; import test_geometry, test_segment, test_anchor; ..."
+
+# 34 视频基准报告（validation/reports/BENCHMARK_v0.md）
+python3 scripts/run_benchmark_v0.py
+```
+
+- 架构：检测→拟合混合跟踪（每 15 帧 YOLO 重检测 + NCC 模板 + 匀速预测），CPU ~15ms/帧
+- M1 基线（诚实口径，假拒绝计为失败）：计数通过 25/34；配对视频 RMSE 均值 0.202；
+  ~13 ms/帧；假拒绝 6 条（检测器域差，M3 数据闭环目标）
+- 20kg 杆-only 被正确拒绝（NO_PLATE_DETECTED，确认用户判断）
+- M1 修复：NCC 位移物理上限（防漂移）、identity-first 远距夺回、运动观察哨
+  （邻域聚类检测错锁背景）、hold 桥接（蹲底遮挡 19-42 帧）、两遍法 ROM 质量门
+  （清除抖动假 rep）、近邻峰合并 + 边界 top 合成
+- 已知短板（M2/M3 目标）：50kg/105kg 部分组仍少计（错锁恢复不全）、
+  速度校准（部分视频 |bias|>0.2）、重负荷工作片检出率（需数据闭环）
+- `algorithms/pipelines.py` 等旧脚本保留作为对照基线，不再维护
+
 ## Quick Start
 
 ```bash
