@@ -65,7 +65,8 @@ validation/holdout/
 2. **先基线后调参**：M3 动手前，用当前引擎跑 `holdout-v0` 留底（命令见下）。没有 v0，后面一切"提升"都无从谈起。
 3. **双报**：任何成绩汇报写 `dev X/Y ｜ held-out A/B` 两组数字。
 4. **永不毕业**：留出集视频永不并入开发集调参（M3 的帧级标注是另一回事：标注帧可进训练，但视频级成绩永远双报）。
-5. 工具缺口（M3 顺手补）：`run_benchmark_v0.py` 的 `BENCH` 路径目前硬编码开发集，需加 `--bench-dir validation/holdout` 参数化。
+5. 工具已就绪（2026-09-10 结清）：`run_benchmark_v0.py` v3 已支持 `--bench-dir` 参数化并输出
+   rep 级配对（供 `scripts/calibrate_mcv.py` 做 M2 线性校准）；留出集镜像目录可直接跑，无需改代码。
 
 ```bash
 # 留出集基线（M3 前跑一次留底）

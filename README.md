@@ -38,6 +38,11 @@ python3 scripts/run_benchmark_v0.py
   44 次触发 0 snap——底部检测盲区 gating，增益待 M3 检测器）；见 BENCHMARK_v1
 - 已知短板（M2/M3 目标）：50kg/105kg 部分组仍少计（错锁恢复不全）、
   速度校准（部分视频 |bias|>0.2）、重负荷工作片检出率（需数据闭环）
+- M2 第一步（2026-09-10）：基准脚本 v3 收集 rep 级配对 →
+  `scripts/calibrate_mcv.py` 线性校准：开发集 LOVO RMSE 0.177→0.124、bias 归零
+  （`validation/reports/CALIBRATION_mcv.json`；最终成绩必须双报 dev｜held-out）
+- 工程：CI（`.github/workflows/ci.yml`）跑 26 单测 + 2 视频 smoke；
+  基准脚本 `--bench-dir` 参数化（留出集共用，HOLDOUT 工具债结清）
 - `algorithms/pipelines.py` 等旧脚本保留作为对照基线，不再维护
 
 ## Quick Start

@@ -1,15 +1,23 @@
-"""
-run_benchmark_v0.py — M0 基线报告（34 视频 GymAware 基准）
-==========================================================
+"""run_benchmark_v0.py — 基准报告（34 视频 GymAware 基准）
+
+v3 变更（2026-09-10，M2 前置）：
+  1. `--bench-dir` 参数化：开发集/留出集共用同一脚本（docs/HOLDOUT.md 第五节
+     工具债结清）。默认保持 `validation/dataset_benchmark`，行为不变。
+  2. 收集 rep 级配对（gt/pred/error）进 JSON 的 `rep_pairs` → M2 线性校准
+     直接可用（scripts/calibrate_mcv.py），不再需要二次跑引擎。
+  3. 清理汇总段两处从未填充的死代码循环（本脚本 v1/v2 遗留）。
+
 用法:
-    cd /home/user/VBT-Research && python3 scripts/run_benchmark_v0.py [--tag v1] [--only 50kg,105kg] [--engine LABEL]
+    cd <repo> && python3 scripts/run_benchmark_v0.py [--tag v1] [--only 50kg,105kg] \
+        [--engine LABEL] [--bench-dir validation/holdout] [--bar-only 20kg_xxx.mp4]
 
 产出:
-    validation/reports/BENCHMARK_{tag}.md / .json（默认 tag=v0，保持 M0 行为）
+    validation/reports/BENCHMARK_{tag}.md / .json（默认 tag=v0）
 
 评估口径（Stage 0/1）:
   - rep 计数: |n_pred - n_gt| <= 1 计为通过（±1 容差）
-  - 速度精度: truncate 配对后 RMSE / MAE / bias / Pearson r
+  - 速度精度: truncate 配对后 RMSE / MAE / bias / Pearson r（视频级）
+    另加 rep 级配对明细与汇总（M2 校准口径）
   - 正确拒绝: 无片视频返回 NO_PLATE_DETECTED = 正确行为（不计失败）
 """
 from __future__ import annotations
@@ -23,18 +31,12 @@ from pathlib import Path
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
-BENCH = REPO / "validation" / "dataset_benchmark"
-sys.path.insert(0, str(BENCH))
-sys.path.insert(0, str(REPO))
-
-from metrics_evaluator import MetricsEvaluator  # noqa: E402
-from vbtcore import PlateDetector, analyze_video  # noqa: E402
-
-MODEL = str(REPO / "models" / "yolo11_plate.onnx")
+DEFAULT_BENCH = REPO / "validation" / "dataset_benchmark"
 REPORT_DIR = REPO / "validation" / "reports"
 
-# 已知"只有杆"视频（无 45cm 片）——NO_PLATE_DETECTED = 正确拒绝
-BAR_ONLY = {"20kg_0.87_0.88_0.89_0.91.mp4"}
+# 已知"只有杆"视频（无 45cm 片）——NO_PLATE_DETECTED = 正确拒绝。
+# 默认集针对开发集；留出集可用 --bar-only 追加（按 video_id 精确匹配）。
+BAR_ONLY_DEFAULT = {"20kg_0.87_0.88_0.89_0.91.mp4"}
 
 
 def main():
@@ -47,24 +49,52 @@ def main():
                     help="报告中的引擎标识")
     ap.add_argument("--no-regrind", action="store_true",
                     help="关闭 M1.5 底部重锚定（烧蚀实验）")
+    ap.add_argument("--bench-dir", default=str(DEFAULT_BENCH),
+                    help="基准目录（含 dataset_index.json 与 raw_videos/），"
+                         "默认开发集；留出集传 validation/holdout")
+    ap.add_argument("--bar-only", default="",
+                    help="追加'只有杆'视频 id（逗号分隔），NO_PLATE_DETECTED 计为正确拒绝")
     args = ap.parse_args()
 
-    with open(BENCH / "dataset_index.json") as f:
+    bench = Path(args.bench_dir)
+    if not bench.is_absolute():
+        bench = REPO / bench
+    if not (bench / "dataset_index.json").exists():
+        sys.exit(f"[错误] 找不到基准索引: {bench / 'dataset_index.json'}\n"
+                 f"      留出集需先按 docs/HOLDOUT.md 采集并建索引。")
+
+    # vbtcore 与 metrics_evaluator 的导入路径（留出集目录同样镜像
+    # dataset_benchmark 布局，metrics_evaluator 随开发集加载）
+    sys.path.insert(0, str(DEFAULT_BENCH))
+    sys.path.insert(0, str(REPO))
+    from metrics_evaluator import MetricsEvaluator  # noqa: E402
+    from vbtcore import PlateDetector, analyze_video  # noqa: E402
+
+    MODEL = str(REPO / "models" / "yolo11_plate.onnx")
+
+    bar_only = set(BAR_ONLY_DEFAULT)
+    for s in args.bar_only.split(","):
+        if s.strip():
+            bar_only.add(s.strip())
+
+    with open(bench / "dataset_index.json") as f:
         dataset = json.load(f)
     if args.only:
         subs = [s.strip() for s in args.only.split(",") if s.strip()]
         dataset = [d for d in dataset
                    if any(s in d["video_id"] for s in subs)]
         print(f"--only {subs} → {len(dataset)} 个视频")
-    print(f"共 {len(dataset)} 个视频 | 模型: {Path(MODEL).name} | tag={args.tag}")
+    print(f"共 {len(dataset)} 个视频 | 基准目录: {bench} | "
+          f"模型: {Path(MODEL).name} | tag={args.tag}")
     det = PlateDetector(MODEL)
 
     rows = []
+    rep_pairs = []  # 全局 rep 级配对：{video, gt, pred, error}（M2 校准口径）
     t_all = time.time()
     for k, item in enumerate(dataset):
         vid = item["video_id"]
         gt = item["gt_reps_mcv"]
-        vp = str(BENCH / "raw_videos" / vid)
+        vp = str(bench / "raw_videos" / vid)
         r = analyze_video(vp, MODEL, detector=det,
                           regrind_enabled=not args.no_regrind)
         row = {
@@ -80,9 +110,13 @@ def main():
                 "bias": None if np.isnan(ev.bias) else round(ev.bias, 3),
                 "r": None if np.isnan(ev.pearson_r) else round(ev.pearson_r, 3),
             })
+            rep_pairs.extend(
+                {"video": vid, "gt": p.gt_mcv, "pred": p.pred_mcv,
+                 "error": round(p.error, 4)}
+                for p in ev.paired)
         elif not r.mcv:
             row["rmse"] = None
-        is_bar_only = vid in BAR_ONLY
+        is_bar_only = vid in bar_only
         row["bar_only"] = is_bar_only
         if r.mcv and gt:
             row["count_ok"] = abs(len(r.mcv) - len(gt)) <= 1
@@ -112,30 +146,32 @@ def main():
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
     paired = [r for r in rows if r.get("rmse") is not None]
     count_ok = sum(1 for r in rows if r["count_ok"])
-    rejects = [r for r in rows if r["status"] == "NO_PLATE_DETECTED"]
     rmse_all = [r["rmse"] for r in paired]
-    gts, preds = [], []
-    for r in paired:
-        item = next(d for d in dataset if d["video_id"] == r["video"])
-        # 重新配对取原始值（简化：用 RMSE 反推不必，直接重算）
-    # 全局 rep 级配对
-    all_gt, all_pred = [], []
-    for r in rows:
-        if r.get("rmse") is None:
-            continue
-        item = next(d for d in dataset if d["video_id"] == r["video"])
-        gt = item["gt_reps_mcv"]
-        vp = str(BENCH / "raw_videos" / r["video"])
-        # 从 rows 里保存的 n_pred 不足以算 rep 级，需要再跑一次？——不，
-        # 改为在循环里就收集。见下方（二次遍历代价高），此处用 rep 级重算。
     spd = [r["ms_per_frame"] for r in rows if r.get("ms_per_frame")]
     rg_tot = [sum(r["regrind"][i] for r in rows) for i in range(3)]
+
+    # rep 级汇总（M2 校准的原始口径）
+    rep_gt = np.array([p["gt"] for p in rep_pairs]) if rep_pairs else np.array([])
+    rep_pred = np.array([p["pred"] for p in rep_pairs]) if rep_pairs else np.array([])
+    if len(rep_gt):
+        rep_err = rep_pred - rep_gt
+        rep_level = {
+            "n": int(len(rep_gt)),
+            "rmse": round(float(np.sqrt(np.mean(rep_err ** 2))), 4),
+            "mae": round(float(np.mean(np.abs(rep_err))), 4),
+            "bias": round(float(np.mean(rep_err)), 4),
+            "r": round(float(np.corrcoef(rep_gt, rep_pred)[0, 1]), 4)
+                 if len(rep_gt) > 2 else None,
+        }
+    else:
+        rep_level = {"n": 0, "rmse": None, "mae": None, "bias": None, "r": None}
 
     report = {
         "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
         "model": Path(MODEL).name,
         "engine": args.engine,
         "tag": args.tag,
+        "bench_dir": str(bench),
         "only": args.only,
         "regrind": not args.no_regrind,
         "total_minutes": round(total_min, 1),
@@ -148,6 +184,8 @@ def main():
         "ms_per_frame_mean": round(float(np.mean(spd)), 1) if spd else None,
         "regrind_totals": {"snap": rg_tot[0], "micro": rg_tot[1],
                            "reject": rg_tot[2]},
+        "rep_level": rep_level,
+        "rep_pairs": rep_pairs,
         "rows": rows,
     }
 
@@ -160,12 +198,15 @@ def main():
         f"# Benchmark {args.tag} — {args.engine}",
         "",
         f"- 生成: {report['generated']} ｜ 引擎: {report['engine']}",
+        f"- 基准目录: {bench}",
         f"- 视频: {n} ｜ 状态分布: {by_status}",
         f"- 计数通过(±1或正确拒绝): **{count_ok}/{n} ({count_ok/n*100:.0f}%)**",
         f"- 假拒绝（有片却 NO_PLATE）: {sum(1 for r in rows if r.get('false_reject'))} 条 "
         f"（检测器域差，M3 数据闭环目标）",
         f"- 有配对视频: {len(paired)} ｜ 视频 RMSE 均值: {report['video_rmse_mean']} "
         f"中位数: {report['video_rmse_median']}",
+        f"- rep 级配对: {rep_level['n']} ｜ RMSE {rep_level['rmse']} ｜ "
+        f"bias {rep_level['bias']} ｜ r {rep_level['r']}",
         f"- 平均速度: {report['ms_per_frame_mean']} ms/帧（CPU ONNX）",
         f"- 总耗时: {total_min:.1f} 分钟",
         f"- regrind 触发统计(snap/微偏/拒绝): "
@@ -183,6 +224,7 @@ def main():
     (REPORT_DIR / f"BENCHMARK_{args.tag}.md").write_text("\n".join(lines), encoding="utf-8")
     print(f"\n报告: {REPORT_DIR/f'BENCHMARK_{args.tag}.md'}")
     print(f"计数通过: {count_ok}/{n} | 配对视频 RMSE 均值 {report['video_rmse_mean']} "
+          f"| rep级 RMSE {rep_level['rmse']} (n={rep_level['n']}) "
           f"| {report['ms_per_frame_mean']} ms/帧")
 
 
