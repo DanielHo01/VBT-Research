@@ -33,6 +33,7 @@ def test_segment_finds_all_reps_with_mean_mcv():
     rep_dur = 2.0          # 向心段 30 帧，稀释 SG 端点效应
     n_reps = 4
     y = _synthetic_set(n_reps=n_reps, rom_px=rom_px, rep_dur_s=rep_dur, fps=fps)
+    y = y[:-15]   # 去掉末尾部分停顿（模拟视频在回位后不久结束）
     mpp = 0.45 / 100.0   # 假设片高 100px
     res = segment_reps(y, fps, mpp, sg_window=11)
     assert res.status == "OK", res.note
@@ -42,8 +43,8 @@ def test_segment_finds_all_reps_with_mean_mcv():
         assert abs(r.mcv - v_theory) / v_theory < 0.15, \
             f"MCV(mean)={r.mcv} vs 理论 {v_theory:.3f}"
         assert abs(r.mcv_mid - v_theory) / v_theory < 0.15
-        # SG 在合成信号的尖锐转角处削峰 ~3%（真实光滑信号影响更小）
-        assert abs(r.rom_m - rom_px * mpp) < 0.02
+        # SG 在合成信号的尖锐转角/末段边界处削峰 ~3-7%（真实光滑信号影响更小）
+        assert abs(r.rom_m - rom_px * mpp) < 0.05
         assert abs(r.duration_s - rep_dur / 2) < 0.15
 
 
@@ -76,3 +77,57 @@ def test_longest_clean_run():
     assert (a, b) == (83, 127), f"得到 ({a},{b})"
     # 短段会被 min_len 过滤（跨度语义: b-a > min_len；3 帧段需 min_len<2）
     assert longest_clean_run(np.array([0., 1., np.nan, 2., 3., 4.]), min_len=1) == (3, 5)
+
+
+def _add_jitter_bumps(y, positions, amp_px=8.0, width=5):
+    """在轨迹的停留段注入抖动包（模拟 NCC 漂移产生的假 rep）。"""
+    out = y.copy()
+    for pos in positions:
+        for k, w in enumerate(range(-width, width + 1)):
+            idx = pos + w
+            if 0 <= idx < len(out):
+                out[idx] += amp_px * np.exp(-0.5 * (w / (width / 2)) ** 2)
+    return out
+
+
+def test_two_pass_rom_gate_kills_jitter_reps():
+    """M1 核心：真 rep(ROM 120px) + 抖动假 rep(ROM 8px) → 只留真 rep。"""
+    fps = 30.0
+    mpp = 0.0045
+    y = _synthetic_set(n_reps=3, rom_px=120.0, rep_dur_s=2.0, pause_frames=40)
+    # 在每个停留段中间注入一个抖动包（会产生假峰谷对）
+    pause_len = 40
+    positions = []
+    block = int(2.0 * fps) + pause_len      # 一个 rep 块的长度
+    for i in range(3):
+        positions.append(i * block + int(2.0 * fps) + pause_len // 2)
+    y_jitter = _add_jitter_bumps(y, positions, amp_px=8.0, width=5)
+    res = segment_reps(y_jitter, fps, mpp)
+    assert len(res.reps) == 3, \
+        f"两遍门失效: 得到 {len(res.reps)} reps（期望 3）: " \
+        f"{[(r.start_frame, round(r.rom_m*100,1)) for r in res.reps]}"
+    for r in res.reps:
+        assert abs(r.rom_m - 120 * mpp) < 0.03   # SG 转角削峰 ~3%
+
+
+def test_two_pass_gate_ratio_param():
+    """rom_keep_ratio=0（关闭相对门）时假 rep 会保留 —— 参数确实起作用。"""
+    fps = 30.0
+    mpp = 0.0045
+    y = _synthetic_set(n_reps=2, rom_px=120.0, rep_dur_s=2.0, pause_frames=40)
+    block = int(2.0 * fps) + 40
+    y_jitter = _add_jitter_bumps(y, [block // 2 + 20], amp_px=8.0, width=5)
+    res_off = segment_reps(y_jitter, fps, mpp, rom_keep_ratio=0.0, mcv_min=0.0)
+    assert len(res_off.reps) == 3, "相对门关闭时应有 3 个候选（2真+1假）"
+    res_on = segment_reps(y_jitter, fps, mpp, rom_keep_ratio=0.45)
+    assert len(res_on.reps) == 2, "相对门开启时应只剩 2 个真 rep"
+
+
+def test_two_pass_gate_all_fake_input():
+    """全是小抖动时（无真 rep），相对门不该硬留 —— 返回 NO_REPS 而非垃圾。"""
+    fps = 30.0
+    mpp = 0.0045
+    y = np.zeros(300)
+    y = _add_jitter_bumps(y, [50, 120, 200], amp_px=6.0, width=6)
+    res = segment_reps(y, fps, mpp)
+    assert len(res.reps) == 0, f"全抖动输入不应出 rep: {len(res.reps)}"

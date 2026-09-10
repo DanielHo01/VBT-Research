@@ -32,6 +32,9 @@ from vbtcore import PlateDetector, analyze_video  # noqa: E402
 MODEL = str(REPO / "models" / "yolo11_plate.onnx")
 REPORT_DIR = REPO / "validation" / "reports"
 
+# 已知"只有杆"视频（无 45cm 片）——NO_PLATE_DETECTED = 正确拒绝
+BAR_ONLY = {"20kg_0.87_0.88_0.89_0.91.mp4"}
+
 
 def main():
     with open(BENCH / "dataset_index.json") as f:
@@ -61,8 +64,15 @@ def main():
             })
         elif not r.mcv:
             row["rmse"] = None
-        row["count_ok"] = (r.mcv and gt and abs(len(r.mcv) - len(gt)) <= 1) or \
-                          (not r.mcv and r.status == "NO_PLATE_DETECTED")
+        is_bar_only = vid in BAR_ONLY
+        row["bar_only"] = is_bar_only
+        if r.mcv and gt:
+            row["count_ok"] = abs(len(r.mcv) - len(gt)) <= 1
+        elif not r.mcv and r.status == "NO_PLATE_DETECTED":
+            row["count_ok"] = is_bar_only          # 只有杆=正确拒绝；有片却拒=假拒绝
+            row["false_reject"] = not is_bar_only
+        else:
+            row["count_ok"] = False
         row["ms_per_frame"] = r.diagnostics.get("ms_per_frame")
         row["coverage"] = r.diagnostics.get("coverage")
         row["yolo_ratio"] = r.diagnostics.get("yolo_ratio")
@@ -125,6 +135,8 @@ def main():
         f"- 生成: {report['generated']} ｜ 引擎: {report['engine']}",
         f"- 视频: {n} ｜ 状态分布: {by_status}",
         f"- 计数通过(±1或正确拒绝): **{count_ok}/{n} ({count_ok/n*100:.0f}%)**",
+        f"- 假拒绝（有片却 NO_PLATE）: {sum(1 for r in rows if r.get('false_reject'))} 条 "
+        f"（检测器域差，M3 数据闭环目标）",
         f"- 有配对视频: {len(paired)} ｜ 视频 RMSE 均值: {report['video_rmse_mean']} "
         f"中位数: {report['video_rmse_median']}",
         f"- 平均速度: {report['ms_per_frame_mean']} ms/帧（CPU ONNX）",
