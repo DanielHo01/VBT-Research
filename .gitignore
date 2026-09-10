@@ -40,6 +40,7 @@ venv/
 
 # Validation raw videos — committed to git (small enough at ~100 MB total)
 # 34 mp4 clips under validation/dataset_benchmark/raw_videos/
+# Held-out set (see docs/HOLDOUT.md) lives under validation/holdout/ (same convention)
 
 # YOLO cache
 runs/detect/plate_v1_run/
