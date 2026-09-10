@@ -1,0 +1,38 @@
+{
+  "source_benchmark": "/home/user/VBT-Research/validation/reports/BENCHMARK_v3.json",
+  "n_pairs": 79,
+  "n_videos": 26,
+  "raw": {
+    "rmse": 0.1771,
+    "bias": -0.0966
+  },
+  "ols": {
+    "a": 0.5085,
+    "b": 0.3306,
+    "rmse_fit": 0.1132,
+    "bias_fit": -0.0
+  },
+  "lovo_cv": {
+    "rmse": 0.1238,
+    "bias": -0.0018
+  },
+  "bootstrap_ci": {
+    "a": [
+      0.224,
+      0.744
+    ],
+    "b": [
+      0.224,
+      0.439
+    ],
+    "rmse_lovo_like": [
+      0.08,
+      0.132
+    ]
+  },
+  "formula": "mcv_cal = 0.5085 * mcv_raw + (+0.3306)",
+  "notes": [
+    "开发集校准（M2 探索），正式成绩必须双报 dev|held-out（HOLDOUT.md 第五节）",
+    "留出集到货后复跑本脚本并对比 LOVO RMSE，判断校准是否可泛化"
+  ]
+}
