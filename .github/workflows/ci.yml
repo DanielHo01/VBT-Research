@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install core test deps
+        # 单测只需 vbtcore 的核心数值库（含 onnxruntime 导入）；无需 ultralytics 等重型依赖
+        run: |
+          pip install --upgrade pip
+          pip install opencv-python-headless numpy scipy onnxruntime
+
+      - name: Run unit tests (26)
+        run: python3 tests/run_all_tests.py
+
+  # 基准 smoke test：跑 2 条视频（1 条轻负荷 + 1 条杆-only 正确拒绝），
+  # 不追求数字对齐，只防"引擎跑不起来 / 状态码全崩"级回归。
+  # 全量 34 视频基准（~5 分钟）保持本地运行，避免 CI 时长与能耗负担。
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install core benchmark deps
+        run: |
+          pip install --upgrade pip
+          pip install opencv-python-headless numpy scipy onnxruntime
+
+      - name: Smoke benchmark (2 videos)
+        run: |
+          python3 scripts/run_benchmark_v0.py \
+            --tag smoke \
+            --only 102.5kg_0.51_0.48_0.36,20kg_0.87_0.88_0.89_0.91 \
+            --engine "vbtcore (CI smoke)"
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke
+          path: validation/reports/BENCHMARK_smoke.md
+          retention-days: 7
