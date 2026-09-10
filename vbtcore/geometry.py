@@ -75,6 +75,37 @@ def canvas_to_orig(pp: FramePreprocess, cx_c: float, cy_c: float,
     return y1, float(pp.orig_h) - x1, bh, bw
 
 
+# ══════════════════════════════════════════════════════════
+#  杠铃片直径查表（M1.5）
+# ══════════════════════════════════════════════════════════
+#
+# 数值来源：TroyKaneshiro/barbell-velocity-tracker METHODOLOGY.md
+# （力量举铁片口径）。注意单位陷阱：25lb≠25kg，键必须区分单位。
+# 竞技举重片/包胶片多为全尺寸 450mm（与重量无关）；未知规格回退 0.45
+# （= 本仓库 34 视频的 bumper 假设，保持现有行为不变）。
+
+PLATE_DIAMETERS_M: dict[str, float] = {
+    "45lb": 0.450, "25kg": 0.450, "20kg": 0.450,
+    "35lb": 0.420,
+    "25lb": 0.400, "15kg": 0.380,
+    "10lb": 0.280, "10kg": 0.320,
+}
+
+DEFAULT_PLATE_DIAMETER_M = 0.45
+
+
+def resolve_plate_diameter(outer_plate: str | None) -> float:
+    """
+    外层片规格（如 "20kg"/"45lb"，大小写/空格不敏感）→ 直径（米）。
+    None 或未知规格 → 0.45（bumper 默认；App 应让用户从固定列表选择，
+    避免把小铁片按 450mm 标定导致 ~2× 尺度误差）。
+    """
+    if outer_plate is None:
+        return DEFAULT_PLATE_DIAMETER_M
+    key = outer_plate.strip().lower().replace(" ", "")
+    return PLATE_DIAMETERS_M.get(key, DEFAULT_PLATE_DIAMETER_M)
+
+
 def rotate_point_roundtrip_check(frame_wh: tuple[int, int], n: int = 200, seed: int = 42) -> bool:
     """
     单元测试辅助：随机取 n 个像素位置，验证

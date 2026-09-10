@@ -31,6 +31,11 @@ python3 scripts/run_benchmark_v0.py
 - M1 修复：NCC 位移物理上限（防漂移）、identity-first 远距夺回、运动观察哨
   （邻域聚类检测错锁背景）、hold 桥接（蹲底遮挡 19-42 帧）、两遍法 ROM 质量门
   （清除抖动假 rep）、近邻峰合并 + 边界 top 合成
+- M1.5（移植 TroyKaneshiro/barbell-velocity-tracker）：rep 底部重锚定 regrind
+  （UP/DOWN 双相真每 rep 一次 + 纠正分级 snap/micro/拒绝）+ MCV 全程平均口径
+  （GymAware ACV，旧平均正速度降级为诊断）+ 外层片直径查表；26 单元测试全过；
+  基准 24/34、RMSE 0.155（同环境 M1 基线 24/34、0.152：中性零回归；
+  44 次触发 0 snap——底部检测盲区 gating，增益待 M3 检测器）；见 BENCHMARK_v1
 - 已知短板（M2/M3 目标）：50kg/105kg 部分组仍少计（错锁恢复不全）、
   速度校准（部分视频 |bias|>0.2）、重负荷工作片检出率（需数据闭环）
 - `algorithms/pipelines.py` 等旧脚本保留作为对照基线，不再维护
