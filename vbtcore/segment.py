@@ -86,12 +86,21 @@ def small_gap_interp(y: np.ndarray, max_gap: int = 10) -> np.ndarray:
 def segment_reps(y_track: np.ndarray, fps: float, mpp: float,
                  dur_range: tuple[float, float] = (0.25, 4.5),
                  rom_min_m: float = 0.012,
+                 rom_keep_ratio: float = 0.45,
+                 mcv_min: float = 0.10,
+                 prominence_px: float = 6.0,
                  v_sanity: tuple[float, float] = (0.05, 2.5),
                  sg_window: int = 15) -> SegmentResult:
     """
     轨迹（像素，y 向下）→ rep 列表。
     流程：小 gap 插值 → 最长干净段 → SG(15,3) 平滑 → 速度（SG 一阶导）
-         → bottom→top 峰谷配对 → 物理过滤。
+         → bottom→top 峰谷配对 → 物理过滤 → 两遍法质量门。
+
+    两遍法质量门（M1，依据 110kg/105kg 碎片化诊断）：
+      同一组内真 rep 的 ROM 彼此相近（同一蹲深），而跟踪抖动产生的
+      假 rep ROM ≤ 真值的 1/3（实测：真 54-63cm vs 假 1.4-20cm）。
+      因此先收集全部候选，再保留 ROM ≥ rom_keep_ratio × 最大候选 ROM
+      且 MCV ≥ mcv_min 者。绝对下限 rom_min_m 仍然生效。
     """
     y = small_gap_interp(y_track)
     run = longest_clean_run(y)
@@ -112,9 +121,43 @@ def segment_reps(y_track: np.ndarray, fps: float, mpp: float,
     v = -savgol_filter(ys, win, 3, deriv=1) * fps * mpp
 
     dur_min, dur_max = dur_range
-    bottoms, _ = find_peaks(y_s, distance=int(fps * dur_min))
-    tops, _ = find_peaks(-y_s, distance=int(fps * dur_min))
+    bottoms, _ = find_peaks(y_s, distance=int(fps * dur_min),
+                            prominence=prominence_px)
+    tops, _ = find_peaks(-y_s, distance=int(fps * dur_min),
+                         prominence=prominence_px)
+
+    # ── 近邻同侧峰合并（M1.3）──────────────────────────
+    # SG 滤波在平台角部会产生成对过冲峰（实测相距 ~9 帧），
+    # 不合并会让 bottom→top 配对错位。保留更深/更高的那个。
+    def _merge_peaks(idx: np.ndarray, vals: np.ndarray) -> np.ndarray:
+        if len(idx) == 0:
+            return idx
+        md = max(6, int(fps * 0.33))
+        out = [(int(idx[0]), float(vals[0]))]   # (帧号, 峰值)
+        for i, v in zip(idx[1:], vals[1:]):
+            if i - out[-1][0] < md:
+                if v > out[-1][1]:
+                    out[-1] = (int(i), float(v))
+            else:
+                out.append((int(i), float(v)))
+        return np.array([f for f, _ in out])
+
+    bottoms = _merge_peaks(bottoms, y_s[bottoms])
+    tops = _merge_peaks(tops, -y_s[tops])
+
     events = sorted([(int(f), "b") for f in bottoms] + [(int(f), "t") for f in tops])
+
+    # ── 边界 top 合成（M1.3）──────────────────────────
+    # 视频常在杠架回位（平台）处结束：真实最后一个 top 贴边界时
+    # find_peaks 检不到（峰不能在边界）。若最后一个事件是 bottom
+    # 且到末帧的时长/位移在合理范围，则用末帧合成 top。
+    if events and events[-1][1] == "b":
+        last_b = events[-1][0]
+        dur_end = (len(y_s) - 1 - last_b) / fps
+        rom_end = (y_s[last_b] - y_s[-1]) * mpp
+        if dur_range[0] <= dur_end <= dur_range[1] and rom_end >= rom_min_m:
+            events.append((len(y_s) - 1, "t"))
+            events.sort()
 
     reps: list[Rep] = []
     i = 0
@@ -143,7 +186,18 @@ def segment_reps(y_track: np.ndarray, fps: float, mpp: float,
         else:
             i += 1
 
+    # ── 两遍法质量门 ─────────────────────────────────
+    gate_note = ""
+    if reps:
+        max_rom = max(r.rom_m for r in reps)
+        rom_keep = max(rom_min_m, rom_keep_ratio * max_rom)
+        n_before = len(reps)
+        reps = [r for r in reps
+                if r.rom_m >= rom_keep and r.mcv >= mcv_min]
+        gate_note = (f"; 两遍门: {n_before}->{len(reps)} "
+                     f"(max_rom={max_rom*100:.0f}cm, 门={rom_keep*100:.1f}cm)")
+
     return SegmentResult(reps=reps,
                          status="OK" if reps else "NO_REPS",
                          y_used=y_s, v_used=v,
-                         note=f"干净段 [{a},{b}] {b-a+1}帧")
+                         note=f"干净段 [{a},{b}] {b-a+1}帧{gate_note}")

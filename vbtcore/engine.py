@@ -177,6 +177,9 @@ class DetectFitTracker:
                  accept_gate_px: float = 150.0,
                  ncc_scale: float = 0.5,
                  plate_diameter_m: float = 0.45,
+                 max_step_factor: float = 0.25,
+                 min_step_px: float = 15.0,
+                 hold_max_frames: int = 40,
                  user_hint: tuple[float, float] | None = None):
         self.det = detector
         self.redet_every = redet_every
@@ -189,7 +192,21 @@ class DetectFitTracker:
         self.accept_gate_px = accept_gate_px
         self.ncc_scale = ncc_scale
         self.plate_diameter_m = plate_diameter_m
+        # NCC 单帧位移上限（M1 防漂移）：真实杠铃速度 ≤2.5m/s 时
+        # 单帧位移 ≈ 0.19×片高；取 0.25×片高留余量，超过即视为漂移
+        self.max_step_factor = max_step_factor
+        self.min_step_px = min_step_px
+        # 丢失桥接上限：蹲底遮挡实测 19-42 帧；40 为双视频网格搜索最优
+        self.hold_max_frames = hold_max_frames
         self.user_hint = user_hint        # 用户点选 (cx, cy)：产品兜底钩子
+
+    # ── hold 桥接（M1.2）──────────────────────────────────
+    def _hold_or_nan(self, cy: float | None, missing_run: int) -> float:
+        """丢失 ≤hold_max 帧时输出保持位（底部停顿的物理近似），
+        更久则 NaN（大 gap 不插值原则仍成立）。"""
+        if cy is None:
+            return np.nan
+        return cy if missing_run <= self.hold_max_frames else np.nan
 
     # ── NCC ──────────────────────────────────────────────
     def _ncc_fit(self, gray: np.ndarray, tpl: Template,
@@ -253,6 +270,7 @@ class DetectFitTracker:
 
         # 锚定期 pending 轨迹（连续性确认 + 运动探针）
         pend: list[dict] = []
+        watch: dict[int, dict] = {}   # 运动簇观察哨（key=id(dict)）
         anchored = False
 
         while cap.isOpened():
@@ -333,7 +351,10 @@ class DetectFitTracker:
             if run_yolo:
                 dets = self.det.detect(frame, self.yolo_conf)
                 n_yolo += 1
-                pred_y = (cy or 0) + v_pred
+                # 多帧预测：遮挡 missing_run 帧后，真目标应在
+                # cy + (missing_run+1)*v_pred 附近（旧代码只预测 1 帧，
+                # 导致快速段遮挡恢复必然超 150px 门被误拒）
+                pred_y = (cy or 0) + v_pred * (missing_run + 1)
                 cands = sorted(
                     (d for d in dets
                      if np.hypot(d.cx - (cx or 0), d.cy - pred_y) < self.accept_gate_px),
@@ -348,12 +369,78 @@ class DetectFitTracker:
                     else:
                         picked = cand
                         break
+                if picked is None:
+                    # M1.2 identity-first 远距夺回：门禁内无合格候选时，
+                    # 对高置信候选做模板身份核验（NCC 分数优先于距离）。
+                    # 依据 50kg 诊断：NCC 锁到背景后真目标在 150-200px 外，
+                    # 纯距离门禁死锁整组。同款片 + 模板高分 = 身份可信。
+                    for cand in sorted(dets, key=lambda d: -d.conf)[:3]:
+                        if cand.conf < 0.35 or tpl is None:
+                            continue
+                        if self._ncc_score_at(gray, tpl, cand.cx, cand.cy) >= 0.55:
+                            picked = cand
+                            break
+
+                # M1.4 运动观察哨：某检测簇在大幅运动（y std>40px）
+                # 而锁定轨迹是平的（|cy-lock|>60px）→ 错锁背景签名，
+                # 强制夺回到该簇。静止片堆 y std≈0 永不触发；
+                # 正确跟踪时工作片就在锁定位附近（距离条件排除）。
+                # 邻域聚类：60px 内的候选归入同一运动簇（2D bin 会把
+                # 连续运动的片切碎，导致每个 bin 永远凑不够 4 次观测）
+                for d in dets:
+                    if d.conf < self.yolo_conf:
+                        continue
+                    hit = None
+                    for cl in watch.values():
+                        if np.hypot(d.cx - cl["cx"], d.cy - cl["cy"]) < 60:
+                            hit = cl
+                            break
+                    if hit is None:
+                        hit = {"cx": d.cx, "cy": d.cy, "obs": []}
+                        watch[id(hit)] = hit
+                    hit["cx"] = 0.7 * d.cx + 0.3 * hit["cx"]
+                    hit["cy"] = 0.7 * d.cy + 0.3 * hit["cy"]
+                    hit["obs"].append((n_frames, d.cy, d.h))
+                cutoff = n_frames - 90
+                for k in list(watch.keys()):
+                    cl = watch[k]
+                    cl["obs"] = [o for o in cl["obs"] if o[0] >= cutoff]
+                    if not cl["obs"]:
+                        del watch[k]
+                for cl in list(watch.values()):
+                    obs = cl["obs"]
+                    if len(obs) >= 4:
+                        ys_w = [o[1] for o in obs]
+                        last_f, last_cy, last_h = obs[-1]
+                        if (float(np.std(ys_w)) > 40
+                                and abs(last_cy - (cy or 0)) > 60):
+                            cx, cy = cl["cx"], cl["cy"]
+                            h_samples.clear()
+                            h_samples.append(last_h)
+                            h_est = last_h
+                            tpl = make_template(frame, cx, cy, last_h,
+                                                self.ncc_scale)
+                            v_pred = 0.0
+                            missing_run = 0
+                            watch.clear()
+                            ys.append(cy); srcs.append("adopt")
+                            ncc_scores.append(1.0)
+                            predict = False
+                            diag.notes.append(f"f{n_frames}: 观察哨夺回")
+                            break
                 if picked is not None:
                     if missing_run == 0:
                         v_pred = 0.7 * (picked.cy - cy) + 0.3 * v_pred
                     cx, cy = picked.cx, picked.cy
+                    h_est = picked.h
                     h_samples.append(picked.h)
-                    if picked.conf >= self.template_refresh_conf and tpl is not None:
+                    # 恢复模式（此前有丢失/拒绝）：模糊使 conf 降低，
+                    # 刷新门槛放宽到 0.35，让模板跟上外观变化
+                    refresh_conf = self.template_refresh_conf
+                    prev_src = srcs[-1] if srcs else None
+                    if missing_run > 0 or prev_src in ("reject", "hold"):
+                        refresh_conf = min(refresh_conf, 0.35)
+                    if picked.conf >= refresh_conf and tpl is not None:
                         tpl = make_template(frame, cx, cy, picked.h, self.ncc_scale)
                     ys.append(cy); srcs.append("yolo"); ncc_scores.append(1.0)
                     missing_run = 0
@@ -364,18 +451,32 @@ class DetectFitTracker:
             if predict and tpl is not None:
                 pred_cy = (cy or 0) + v_pred
                 fit = self._ncc_fit(gray, tpl, cx or 0, pred_cy, v_pred)
-                if fit is not None and fit[2] >= self.ncc_thresh:
+                max_step = max(self.min_step_px,
+                               self.max_step_factor * (h_est or 0))
+                if (fit is not None and fit[2] >= self.ncc_thresh
+                        and np.hypot(fit[0] - (cx or 0), fit[1] - (cy or 0)) <= max_step):
                     if missing_run == 0:
                         v_pred = 0.7 * (fit[1] - cy) + 0.3 * v_pred
                     cx, cy = fit[0], fit[1]
                     ys.append(cy); srcs.append("ncc"); ncc_scores.append(fit[2])
                     missing_run = 0
+                elif fit is not None and fit[2] >= self.ncc_thresh:
+                    # NCC 峰值可信但位移超物理上限 → 判为漂移，拒绝
+                    missing_run += 1
+                    ys.append(self._hold_or_nan(cy, missing_run))
+                    srcs.append("reject" if missing_run > self.hold_max_frames else "hold")
+                    ncc_scores.append(fit[2])
                 else:
                     missing_run += 1
-                    ys.append(np.nan); srcs.append("miss"); ncc_scores.append(0.0)
+                    v_pred *= 0.6   # hold 期间速度衰减（模拟减速到停）
+                    ys.append(self._hold_or_nan(cy, missing_run))
+                    srcs.append("miss" if missing_run > self.hold_max_frames else "hold")
+                    ncc_scores.append(0.0)
             elif predict:
                 missing_run += 1
-                ys.append(np.nan); srcs.append("miss"); ncc_scores.append(0.0)
+                ys.append(self._hold_or_nan(cy, missing_run))
+                srcs.append("miss" if missing_run > self.hold_max_frames else "hold")
+                ncc_scores.append(0.0)
 
         cap.release()
         elapsed = __import__("time").time() - t0
