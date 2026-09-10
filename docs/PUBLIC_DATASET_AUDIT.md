@@ -45,10 +45,24 @@
 2. **Tier-2 留出集验收**：holdout-v0 复测（双报纪律），验证跨健身房泛化。
 3. **Tier-3 自标兜底**：只对 Tier-1 救不了的失败模式（预判：蹲底遮挡 + 片堆干扰）用 `interactive_label.py` 自标 200–300 帧，混合再训。
 
-## 五、待办（需要外部条件）
+## 五、沙箱网络实测与数据获取路径（2026-09-10）
 
-- [ ] **Roboflow API key**（下载候选数据集必需；免费注册即有）——拿到后可写脚本批量下载并做类分布/抽帧审计
+**实测结论：本沙箱无法直连 Roboflow/Kaggle/HuggingFace**——出站网络白名单仅放行
+`github.com`/`api.github.com`/`pypi.org`；roboflow.com 全系域名 TCP 可连但 TLS 握手被断；
+且 Roboflow 下载页本身要求登录（免费账号即可，网站下载不需要 API key，key 仅供 API 访问）。
+因此数据获取路径为：
+
+1. **用户浏览器下载**（推荐）：Roboflow 候选页 → Download Dataset → YOLOv11 格式 → 免费登录下载
+   → 把 zip 丢进 `m3_data/downloads/`（入口文档：`docs/M3_DATA_INTAKE.md`）；
+2. **GitHub 直连**（已核实，收获有限）：oscaragren/VBT 的 `data/` 在 git 里只有空目录
+   （本体在 Roboflow）；simonkosina/vbt 有 **1088 张整杠 XML 标注 @416px** 在仓内（整杠框，
+   非片框，价值有限，暂不拉取）。其余候选仓库均无现成标注数据。
+
+## 六、待办（需要外部条件）
+
+- [ ] **下载候选 zip**：用户浏览器操作（见第五节路径 1；免费 Roboflow 账号即可，无需 API key）
 - [ ] **Kaggle 或 Colab 免费 GPU**（训练执行地；沙箱无 GPU，本地 GTX 1650 只做推理/标注）
 - [ ] 下载后逐条核实：机位是否侧视、是否有遮挡帧、`Weight Plate Detector` 完整类列表（确认 plate_25_red 是否含蓝/黄/绿全系）
 
 > 相关文档：TECH_ROUTE.md（M3 数据闭环）· HOLDOUT.md（评估纪律）· PLATE_LAYER_REVIEW.md（域差实证）
+> 工具：scripts/m3_merge_datasets.py（合并+类映射+审计，已自测）· docs/M3_DATA_INTAKE.md（数据入口）
