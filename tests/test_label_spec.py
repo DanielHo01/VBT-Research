@@ -13,6 +13,7 @@ if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
 import label_common as lc  # noqa: E402
+import public_registry as pr  # noqa: E402
 
 
 def test_yolo_roundtrip():
@@ -122,6 +123,16 @@ def test_repeat_factor_math():
     assert lc.plan_repeat_factor(5600, 0) == 1
     # 50% 目标：K*200/(5600+K*200)=0.5 → K=28
     assert lc.plan_repeat_factor(5600, 200, 0.5) == 28
+
+
+def test_registry_keep_first_and_unlisted_default():
+    # keep 优先：'barbell-end' 命中 keep 的 end，不被 drop 的 barbell 误杀
+    assert pr.match_class("barbell-end", ["end"], ["barbell"]) == "keep"
+    assert pr.match_class("Barbell", ["end"], ["barbell"]) == "drop"
+    assert pr.match_class("plate_25_red", ["plate"], ["barbell"]) == "keep"
+    assert pr.match_class("weird_action", ["plate"], ["barbell"]) == "unlisted"
+    assert pr.match_class("zacisk", ["kg", "plate"], ["zacisk"]) == "drop"
+    assert pr.match_class("25kg", ["kg", "plate"], ["zacisk"]) == "keep"
 
 
 def test_queue_manifest_io_roundtrip(tmp_path=None):
