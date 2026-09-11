@@ -19,10 +19,12 @@ if str(ROOT) not in sys.path:
 
 import test_anchor  # noqa: E402
 import test_geometry  # noqa: E402
+import test_label_spec  # noqa: E402
 import test_regrind  # noqa: E402
 import test_segment  # noqa: E402
 
-MODULES = [test_geometry, test_segment, test_anchor, test_regrind]
+MODULES = [test_geometry, test_segment, test_anchor, test_regrind,
+           test_label_spec]
 
 
 def main() -> int:
