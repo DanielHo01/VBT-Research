@@ -45,6 +45,21 @@ python3 scripts/run_benchmark_v0.py
   基准脚本 `--bench-dir` 参数化（留出集共用，HOLDOUT 工具债结清）
 - `algorithms/pipelines.py` 等旧脚本保留作为对照基线，不再维护
 
+## M3 检测器换血（进行中）
+
+> `yolo11_plate` 是当前唯一真瓶颈（6 条假拒绝全是工作片零检出）。路线：**抛弃重训**
+> （COCO 预训练 YOLO11n + 全新单类头），公开 8–11k 图作底 + 自标 196 帧种子加权。
+> 详见 [`docs/M3_TRAINING_PLAN.md`](docs/M3_TRAINING_PLAN.md)。
+
+```bash
+python scripts/fetch_public.py --list              # 13 个公开源注册表
+python scripts/mine_frames.py                      # 失败帧挖掘 → 196 帧种子队列
+python scripts/interactive_label.py --mine datasets/mining/queue_r0.json  # 标注
+python scripts/build_dataset.py --public ... --auto-val 4                 # 组装
+# 训练在 Colab T4（notebooks/colab_train_plate_v2.ipynb），回传后跑 Gate C：
+python scripts/run_benchmark_v0.py --tag plate_v2a --model models/plate_v2a.onnx
+```
+
 ## Quick Start
 
 ```bash

@@ -8,6 +8,9 @@ models/*.pt
 datasets/weightlifting-plates/
 datasets/owlvit_pseudo/
 datasets/interactive_labels/
+datasets/mining/
+datasets/plate_v2/
+datasets/public/
 
 # Archives — old experiment debris
 _archive/
@@ -42,8 +45,9 @@ venv/
 # 34 mp4 clips under validation/dataset_benchmark/raw_videos/
 # Held-out set (see docs/HOLDOUT.md) lives under validation/holdout/ (same convention)
 
-# YOLO cache
-runs/detect/plate_v1_run/
+# YOLO cache & training runs
+runs/
+.ipynb_checkpoints/
 
 # Pre-trained weights (keep model files but not backups)
 yolov8n.pt

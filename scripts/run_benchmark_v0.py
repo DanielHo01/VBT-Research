@@ -9,7 +9,8 @@ v3 变更（2026-09-10，M2 前置）：
 
 用法:
     cd <repo> && python3 scripts/run_benchmark_v0.py [--tag v1] [--only 50kg,105kg] \
-        [--engine LABEL] [--bench-dir validation/holdout] [--bar-only 20kg_xxx.mp4]
+        [--engine LABEL] [--bench-dir validation/holdout] [--bar-only 20kg_xxx.mp4] \
+        [--model models/plate_v2a.onnx]
 
 产出:
     validation/reports/BENCHMARK_{tag}.md / .json（默认 tag=v0）
@@ -54,6 +55,9 @@ def main():
                          "默认开发集；留出集传 validation/holdout")
     ap.add_argument("--bar-only", default="",
                     help="追加'只有杆'视频 id（逗号分隔），NO_PLATE_DETECTED 计为正确拒绝")
+    ap.add_argument("--model", default=None,
+                    help="检测器 ONNX（默认 models/yolo11_plate.onnx；"
+                         "M3 门控时传 models/plate_v2a.onnx）")
     args = ap.parse_args()
 
     bench = Path(args.bench_dir)
@@ -70,7 +74,9 @@ def main():
     from metrics_evaluator import MetricsEvaluator  # noqa: E402
     from vbtcore import PlateDetector, analyze_video  # noqa: E402
 
-    MODEL = str(REPO / "models" / "yolo11_plate.onnx")
+    MODEL = args.model or str(REPO / "models" / "yolo11_plate.onnx")
+    if not Path(MODEL).exists():
+        sys.exit(f"[错误] 模型不存在: {MODEL}")
 
     bar_only = set(BAR_ONLY_DEFAULT)
     for s in args.bar_only.split(","):

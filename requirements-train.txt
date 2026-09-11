@@ -1,0 +1,13 @@
+# M3 训练环境（Colab T4 / Kaggle P100；与 vbtcore 运行时 requirements.txt 分离）
+#
+# 版本说明（沙箱 smoke 实证，2026-09-11）：
+# - ultralytics>=8.3 必需：8.2.x 无 YOLO11 模型定义（requirements.txt 的 8.2.0 是旧版遗留，
+#   vbtcore 运行时根本不 import ultralytics，不要动它）。
+# - Colab/Kaggle 自带 torch + CUDA + cv2，此处不 pin，让平台自带版本工作。
+# - 沙箱注意：ultralytics 会拖入 opencv-python（非 headless），无 libGL 的容器
+#   需改用 opencv-python-headless（见 M3 文档 §5）。
+
+ultralytics==8.4.147
+onnx>=1.17
+onnxruntime>=1.19
+roboflow>=1.1
