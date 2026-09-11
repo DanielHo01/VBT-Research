@@ -20,7 +20,7 @@ jobs:
           pip install --upgrade pip
           pip install opencv-python-headless numpy scipy onnxruntime
 
-      - name: Run unit tests (37)
+      - name: Run unit tests (38)
         run: python3 tests/run_all_tests.py
 
   # 基准 smoke test：跑 2 条视频（1 条轻负荷 + 1 条杆-only 正确拒绝），
