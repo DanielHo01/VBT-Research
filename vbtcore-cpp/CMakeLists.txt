@@ -1,0 +1,99 @@
+cmake_minimum_required(VERSION 3.18)
+project(vbtcore_cpp
+    VERSION 0.1.0
+    DESCRIPTION "C++ mid-layer for VBT-Research (Android Demo Phase 2)"
+    LANGUAGES CXX)
+
+# ── C++ 标准 ──────────────────────────────────────────────────────
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ── 编译选项 ──────────────────────────────────────────────────────
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+option(VBT_BUILD_TESTS "Build golden tests" ON)
+option(VBT_BUILD_ANDROID "Build for Android NDK" OFF)
+
+# ── 公共配置 ──────────────────────────────────────────────────────
+if(NOT DEFINED VBT_DEPLOY_DIR)
+    set(VBT_DEPLOY_DIR "${CMAKE_BINARY_DIR}/deploy")
+endif()
+
+# ── 依赖 ──────────────────────────────────────────────────────────
+find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+
+# ONNX Runtime C++ API（必须预编译 NDK 版本）
+find_path(ONNXRUNTIME_INCLUDE_DIR
+    NAMES onnxruntime_cxx_api.h
+    PATHS ${ONNXRUNTIME_ROOT} ${ANDROID_NDK}/../onnxruntime
+    DOC "ONNX Runtime C++ API header")
+find_library(ONNXRUNTIME_LIB
+    NAMES onnxruntime
+    PATHS ${ONNXRUNTIME_ROOT} ${ANDROID_NDK}/../onnxruntime
+    DOC "ONNX Runtime shared library")
+
+if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIB)
+    message(WARNING "ONNX Runtime not found. Build ONNX-less demo with stub detector.")
+    set(VBT_HAS_ONNXRUNTIME OFF)
+else()
+    set(VBT_HAS_ONNXRUNTIME ON)
+endif()
+
+# nlohmann/json (header-only)
+find_path(JSON_INCLUDE_DIR
+    NAMES nlohmann/json.hpp
+    PATHS ${JSON_ROOT} /usr/include /usr/local/include
+    DOC "nlohmann/json single-header")
+if(NOT JSON_INCLUDE_DIR)
+    message(FATAL_ERROR "nlohmann/json.hpp not found. Install or set JSON_ROOT.")
+endif()
+
+# ── 库 ──────────────────────────────────────────────────────────
+add_library(vbtcore STATIC
+    src/geometry.cpp
+    src/kalman.cpp
+    src/segmenter.cpp
+    src/tracker.cpp
+    src/analyze.cpp
+    src/detector.cpp
+)
+target_include_directories(vbtcore
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE
+        ${JSON_INCLUDE_DIR}
+)
+target_link_libraries(vbtcore
+    PUBLIC OpenCV::core OpenCV::imgproc
+)
+if(VBT_HAS_ONNXRUNTIME)
+    target_include_directories(vbtcore PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+    target_link_libraries(vbtcore PRIVATE ${ONNXRUNTIME_LIB})
+    target_compile_definitions(vbtcore PRIVATE VBT_HAS_ONNXRUNTIME=1)
+endif()
+
+# ── Golden Test ──────────────────────────────────────────────────
+if(VBT_BUILD_TESTS)
+    enable_testing()
+    add_executable(golden_test tests/golden_test.cpp)
+    target_link_libraries(golden_test PRIVATE vbtcore)
+    target_include_directories(golden_test PRIVATE
+        ${JSON_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    add_test(NAME golden_test COMMAND golden_test)
+endif()
+
+# ── 部署 ──────────────────────────────────────────────────────────
+install(TARGETS vbtcore
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+install(DIRECTORY include/vbt DESTINATION include)
+
+message(STATUS "vbtcore-cpp ${PROJECT_VERSION} configured")
+message(STATUS "  OpenCV: ${OpenCV_VERSION}")
+message(STATUS "  ONNX Runtime: ${VBT_HAS_ONNXRUNTIME}")
+message(STATUS "  nlohmann/json: ${JSON_INCLUDE_DIR}")

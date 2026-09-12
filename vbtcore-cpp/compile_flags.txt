@@ -1,0 +1,25 @@
+# C++ LSP flags for vbtcore-cpp
+# ============================================
+# Used by clangd / clang-tidy for IDE-style checks.
+# Build integration: CMakeLists.txt (these flags MUST stay in sync).
+#
+# Note: This C++ port requires:
+#   - C++17 compiler (clang 9+, gcc 9+, MSVC 2019+)
+#   - OpenCV 4.5+ (Android: OpenCV-android-sdk)
+#   - ONNX Runtime C++ API (Android: prebuilt NDK build)
+#   - nlohmann/json (header-only)
+#
+# Set OPENCV_INCLUDE_DIR to your OpenCV install (e.g., /usr/include/opencv4).
+# If unset, the LSP falls back to cmake/opencv_stub/ (structure-only stub,
+# NOT for actual compilation — the real OpenCV is linked by CMake).
+
+-Iinclude
+-Icmake/opencv_stub
+-Icmake/json_stub
+-std=c++17
+-Wall
+-Wextra
+-DVBT_HAS_ONNXRUNTIME=0
+${OPENCV_INCLUDE_DIR:+-I${OPENCV_INCLUDE_DIR}}
+${ONNXRUNTIME_ROOT:+-I${ONNXRUNTIME_ROOT}}
+${JSON_ROOT:+-I${JSON_ROOT}}
