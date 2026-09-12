@@ -11,20 +11,23 @@ sensitivity_check.py — 参数敏感性回归（过拟合哨兵）
 
 用法: PYTHONPATH=<deps> python3 scripts/sensitivity_check.py [--quick]
 """
+
 from __future__ import annotations
-import sys, time
+
+import sys
 from pathlib import Path
+
 import numpy as np
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from vbtcore.detector import PlateDetector          # noqa: E402
-from vbtcore.engine import DetectFitTracker         # noqa: E402
-from vbtcore.segment import segment_reps            # noqa: E402
+from vbtcore.detector import PlateDetector  # noqa: E402
+from vbtcore.engine import DetectFitTracker  # noqa: E402
+from vbtcore.segment import segment_reps  # noqa: E402
 
 BENCH = REPO / "validation" / "dataset_benchmark" / "raw_videos"
-MODEL = str(REPO / "models" / "yolo11_plate.onnx")
+MODEL = str(REPO / "models" / "best.onnx")
 
 # 覆盖不同负荷/机位的代表性子集（quick 模式减半）
 VIDEOS = [
@@ -76,8 +79,7 @@ def main():
                 if cfg["layer"] == "segment":
                     y, hs, fps = tracks[vid]
                     mpp = 0.45 / np.median(hs)
-                    n = len(segment_reps(y, fps, mpp,
-                                         rom_keep_ratio=val).reps)
+                    n = len(segment_reps(y, fps, mpp, rom_keep_ratio=val).reps)
                 else:
                     tr = DetectFitTracker(det, redet_every=15, **{pname: val})
                     y, hs, diag, fps = tr.process(str(BENCH / vid))
@@ -86,8 +88,10 @@ def main():
                 flag = "" if n == base_counts[vid] else " ←变化"
                 row.append(f"{vid[:10]}:{n}/{gt}{flag}")
             print(f"  {pname}={val}: " + "  ".join(row))
-    print("\n判读: 大多数视频计数在扰动下不变 → 参数平台宽（健壮）；"
-          "若有视频悬崖式变化 → 过拟合风险，见 docs/TECH_ROUTE.md 第九节")
+    print(
+        "\n判读: 大多数视频计数在扰动下不变 → 参数平台宽（健壮）；"
+        "若有视频悬崖式变化 → 过拟合风险，见 docs/TECH_ROUTE.md 第九节"
+    )
 
 
 if __name__ == "__main__":

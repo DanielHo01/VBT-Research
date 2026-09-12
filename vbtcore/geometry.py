@@ -12,6 +12,7 @@ vbtcore.geometry — 帧预处理与坐标映射（纯函数，可单元测试�
   该错误保持两两距离不变（反射变换），跟踪侥幸可用，
   但所有绝对坐标逻辑（贴边拒绝、居中加权、bar path 绘制）全部失效。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,43 +24,45 @@ import numpy as np
 @dataclass
 class FramePreprocess:
     """一帧预处理的结果：network blob + 逆映射所需参数。"""
-    blob: np.ndarray            # (1, 3, S, S) float32
-    scale: float                # canvas -> 预处理前帧 的缩放
-    xo: int                     # canvas 上的 x 偏移
+
+    blob: np.ndarray  # (1, 3, S, S) float32
+    scale: float  # canvas -> 预处理前帧 的缩放
+    xo: int  # canvas 上的 x 偏移
     yo: int
-    rotated: bool               # 是否做了顺时针 90° 旋转
-    orig_h: int                 # 原始帧尺寸
+    rotated: bool  # 是否做了顺时针 90° 旋转
+    orig_h: int  # 原始帧尺寸
     orig_w: int
 
 
 def preprocess(frame: np.ndarray, size: int = 640) -> FramePreprocess:
     """
-    YOLO 预处理：竖屏先顺时针旋转 90°（消除旧路线的挤压 resize），
-    再 letterbox 到 size×size。输出 blob 与逆映射参数。
+    YOLO 预处理：letterbox 到 size×size，保持原始方向。
+    训练数据（720×1280 竖屏）直接 letterbox，无需旋转。
     """
     h, w = frame.shape[:2]
-    rotated = h > w
-    if rotated:
-        work = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-    else:
-        work = frame
-    wh, ww = work.shape[:2]
+    work = frame
+    wh, ww = h, w
+    rotated = False
 
     scale = min(size / wh, size / ww)
     nh, nw = int(wh * scale), int(ww * scale)
-    canvas = np.zeros((size, size, 3), dtype=np.uint8)
+    # 灰色填充（114/255 ≈ 0.447）：匹配 YOLO 训练时的 letterbox 策略
+    canvas = np.full((size, size, 3), 114, dtype=np.uint8)
     yo = (size - nh) // 2
     xo = (size - nw) // 2
     resized = cv2.resize(work, (nw, nh))
-    canvas[yo:yo + nh, xo:xo + nw] = resized
+    canvas[yo : yo + nh, xo : xo + nw] = resized
 
-    blob = canvas[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255.0
-    return FramePreprocess(blob=blob, scale=float(scale), xo=xo, yo=yo,
-                           rotated=rotated, orig_h=h, orig_w=w)
+    # bgr=0.0：BGR 通道顺序，无需翻转
+    blob = canvas.transpose(2, 0, 1)[None].astype(np.float32) / 255.0
+    return FramePreprocess(
+        blob=blob, scale=float(scale), xo=xo, yo=yo, rotated=rotated, orig_h=h, orig_w=w
+    )
 
 
-def canvas_to_orig(pp: FramePreprocess, cx_c: float, cy_c: float,
-                   w_c: float, h_c: float) -> tuple[float, float, float, float]:
+def canvas_to_orig(
+    pp: FramePreprocess, cx_c: float, cy_c: float, w_c: float, h_c: float
+) -> tuple[float, float, float, float]:
     """
     canvas 上的 box 中心+宽高 → 原始帧坐标。
     旋转分支使用已验证的正确逆映射（见模块 docstring）；
@@ -85,10 +88,14 @@ def canvas_to_orig(pp: FramePreprocess, cx_c: float, cy_c: float,
 # （= 本仓库 34 视频的 bumper 假设，保持现有行为不变）。
 
 PLATE_DIAMETERS_M: dict[str, float] = {
-    "45lb": 0.450, "25kg": 0.450, "20kg": 0.450,
+    "45lb": 0.450,
+    "25kg": 0.450,
+    "20kg": 0.450,
     "35lb": 0.420,
-    "25lb": 0.400, "15kg": 0.380,
-    "10lb": 0.280, "10kg": 0.320,
+    "25lb": 0.400,
+    "15kg": 0.380,
+    "10lb": 0.280,
+    "10kg": 0.320,
 }
 
 DEFAULT_PLATE_DIAMETER_M = 0.45
@@ -106,7 +113,116 @@ def resolve_plate_diameter(outer_plate: str | None) -> float:
     return PLATE_DIAMETERS_M.get(key, DEFAULT_PLATE_DIAMETER_M)
 
 
-def rotate_point_roundtrip_check(frame_wh: tuple[int, int], n: int = 200, seed: int = 42) -> bool:
+# ══════════════════════════════════════════════════════════
+#  亚像素椭圆拟合（EllipseCalibrator 核心）
+# ══════════════════════════════════════════════════════════
+
+
+def extract_plate_crop(
+    frame: np.ndarray,
+    cx: float,
+    cy: float,
+    h: float,
+    margin: float = 1.5,
+) -> tuple[np.ndarray, float, float] | None:
+    """
+    从帧中提取铃片的紧裁剪区（padding = margin × 片高）。
+    返回 (crop, crop_cx, crop_cy)：crop 图像 + 圆心在 crop 内相对坐标。
+    铃片占框高的约 70%（侧视椭圆），h 传入的是 YOLO 框高度。
+    """
+    H, W = frame.shape[:2]
+    pad = int(h * margin)
+    x1 = int(np.clip(cx - pad, 0, W - 1))
+    y1 = int(np.clip(cy - pad, 0, H - 1))
+    x2 = int(np.clip(cx + pad, x1 + 1, W))
+    y2 = int(np.clip(cy + pad, y1 + 1, H))
+    crop = frame[y1:y2, x1:x2]
+    if crop.size == 0 or crop.shape[0] < 5 or crop.shape[1] < 5:
+        return None
+    return crop, float(cx - x1), float(cy - y1)
+
+
+def fit_plate_ellipse(
+    crop: np.ndarray, crop_cx: float, crop_cy: float
+) -> tuple[float, float, float, float] | None:
+    """
+    在铃片裁剪上做亚像素椭圆拟合，返回 (major_axis_px, center_y_px, center_x_px, angle_deg)。
+
+    核心算法（纯 CPU ~0.5ms/帧）：
+      1. 灰度化 + 高斯模糊（降噪）
+      2. 自适应阈值（处理不同光照）
+      3. Canny 边缘检测
+      4. 形态学闭操作（填孔，铃片圆孔→实心圆）
+      5. cv2.findContours 找最大轮廓
+      6. cv2.fitEllipse（亚像素精度，直接返回中心+轴长+角度）
+
+    优势：
+      - 亚像素精度（远超 YOLO bbox 的整数像素精度）
+      - 纯 CPU，无 GPU 依赖
+      - 天然免疫挂片厚度（边缘≠bbox 内边缘，是物理圆周）
+      - 不需要多视图几何（已知物理直径，单视图可标定）
+
+    返回 None 表示拟合失败（画面过暗/过曝/无明显边缘）。
+    """
+    if crop.shape[0] < 5 or crop.shape[1] < 5:
+        return None
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    # 高斯模糊降噪（核大小按裁剪尺寸自适应）
+    k = max(3, int(min(crop.shape[:2]) / 16) * 2 + 1)
+    blurred = cv2.GaussianBlur(gray, (k, k), 0)
+    # 自适应阈值（应对不同光照；铃片灰度与环境对比度高）
+    thresh_type = cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    _, binary = cv2.threshold(blurred, 0, 255, thresh_type)
+    # Canny 边缘
+    edges = cv2.Canny(blurred, 50, 150)
+    # 形态学闭操作：填铃片圆孔，形成完整实心圆轮廓
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+    # 找轮廓
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        # fallback：直接用二值图找轮廓
+        contours, _ = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+    if not contours:
+        return None
+    # 取最大轮廓（铃片是画面中最显著的圆形结构）
+    best = max(contours, key=cv2.contourArea)
+    area = cv2.contourArea(best)
+    if area < 20:  # 太小的轮廓忽略
+        return None
+    # fitEllipse 返回 (center, (w, h), angle)
+    try:
+        ellipse = cv2.fitEllipse(best)
+    except cv2.error:
+        return None
+    (cx_e, cy_e), (w_px, h_px), angle = ellipse
+    # 铃片侧视时宽 > 高；取长轴作为物理直径对应方向
+    major = max(w_px, h_px)
+    minor = min(w_px, h_px)
+    if major < 3:
+        return None
+    # 圆心在原帧坐标系
+    center_x_px = cx_e  # 相对 crop 坐标
+    center_y_px = cy_e
+    return major, center_y_px, center_x_px, angle
+
+
+def compute_mpp(major_axis_px: float, plate_diameter_m: float) -> float | None:
+    """
+    已知物理直径（米），求米/像素比例尺。
+    major_axis_px：椭圆长轴像素数
+    plate_diameter_m：铃片直径（米），来自用户选择或查表
+    """
+    if major_axis_px < 2:
+        return None
+    return plate_diameter_m / major_axis_px
+
+
+def rotate_point_roundtrip_check(
+    frame_wh: tuple[int, int], n: int = 200, seed: int = 42
+) -> bool:
     """
     单元测试辅助：随机取 n 个像素位置，验证
     cv2.ROTATE_90_CLOCKWISE 正映射与我们逆映射的往返一致性（逐像素相等）。

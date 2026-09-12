@@ -1,31 +1,63 @@
 """
-vbtcore — VBT Core Engine v1（M0 基建版）
+vbtcore — VBT Core Engine v5（重构版）
 =========================================
-修复的四个历史 bug（详见各模块 docstring）：
-  1. geometry.py    竖屏旋转逆映射镜像错误（可视化实证）
-  2. detector.py    置信度双重 sigmoid + 直 resize 挤压畸变
-  3. engine.py      锚定最高置信≠工作片（物理先验+运动探针+点选兜底）
-                    + 魔法系数 scale_factor=1.15 移除
-  4. segment.py     MCV 定义统一（向心段全程平均，对齐 GymAware ACV）
-M1.5（移植 TroyKaneshiro/barbell-velocity-tracker）：
-  engine.py       rep 底部重锚定 regrind（UP/DOWN 双相，真正每 rep 一次）
-  geometry.py     外层片直径查表（非 450mm 铁片不再硬假设）
-架构：检测→拟合混合跟踪（每 N 帧 YOLO 重检测 + NCC 模板 + 匀速预测），
-实测 ~12ms/帧（CPU），YOLO 调用率 7-14%。
+Step 4 重构（2026-09-12）核心改动：
+  1. calibrator.py  静态中位数锁死 + CV 变异系数门禁
+  2. tracker.py     物理空间卡尔曼（米/秒）+ LK 光流密集跟踪
+  3. segmenter.py    速度状态机分段（SSC + 硬拉两种拓扑）
+  4. pipeline.py     PTS 时间戳 + 密集跟踪集成
+Benchmark 结果：14/34 (41%) 计数通过（vs 旧版 3/34 (9%)）
 """
-from .detector import PlateDetector, Detection
-from .engine import (DetectFitTracker, TrackDiagnostics, anchor_score,
-                     BottomRegrind, select_regrind_candidate,
-                     regrind_verdict)
-from .geometry import resolve_plate_diameter, PLATE_DIAMETERS_M
+
+from .calibrator import StaticPlateCalibrator
+from .detector import Detection, PlateDetector
+from .engine import (
+  BottomRegrind,
+  DetectFitTracker,
+  TrackDiagnostics,
+  anchor_score,
+  regrind_verdict,
+  select_regrind_candidate,
+)
+from .geometry import (
+  PLATE_DIAMETERS_M,
+  compute_mpp,
+  extract_plate_crop,
+  fit_plate_ellipse,
+  resolve_plate_diameter,
+)
+from .kalman import BarbellKalmanTracker
+from .pipeline import SetResult, StatusCodes, analyze_video
 from .segment import Rep, SegmentResult, segment_reps
-from .pipeline import analyze_video, SetResult, StatusCodes
+from .segmenter import BiomechanicalRepSegmenter
+from .tracker import DenseVisualTracker, KinematicKalmanTracker
+from .tracker_ek import EKTrackDiagnostics, EllipseKalmanTracker
 
 __all__ = [
-    "PlateDetector", "Detection",
-    "DetectFitTracker", "TrackDiagnostics", "anchor_score",
-    "BottomRegrind", "select_regrind_candidate", "regrind_verdict",
-    "resolve_plate_diameter", "PLATE_DIAMETERS_M",
-    "Rep", "SegmentResult", "segment_reps",
-    "analyze_video", "SetResult", "StatusCodes",
+  "PlateDetector",
+  "Detection",
+  "DetectFitTracker",
+  "TrackDiagnostics",
+  "anchor_score",
+  "BottomRegrind",
+  "select_regrind_candidate",
+  "regrind_verdict",
+  "resolve_plate_diameter",
+  "PLATE_DIAMETERS_M",
+  "extract_plate_crop",
+  "fit_plate_ellipse",
+  "compute_mpp",
+  "BarbellKalmanTracker",
+  "EllipseKalmanTracker",
+  "EKTrackDiagnostics",
+  "StaticPlateCalibrator",
+  "KinematicKalmanTracker",
+  "DenseVisualTracker",
+  "BiomechanicalRepSegmenter",
+  "Rep",
+  "SegmentResult",
+  "segment_reps",
+  "analyze_video",
+  "SetResult",
+  "StatusCodes",
 ]
