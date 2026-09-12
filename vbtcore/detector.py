@@ -14,22 +14,22 @@ vbtcore.detector — 杠铃片检测器（统一修复版）
   - barbell_v4.onnx：输出 [1,6,3549]（4+2 类旧导出），本引擎不支持，
     需要时请用明确的解析器（避免再靠 argmax 侥幸工作）。
 """
+
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
-import os
-
-import cv2
 import numpy as np
-import onnxruntime as ort
+import onnxruntime as ort  # noqa: pi-lens=unsafe-call
 
-from .geometry import FramePreprocess, preprocess, canvas_to_orig
+from .geometry import canvas_to_orig, preprocess
 
 
 @dataclass
 class Detection:
     """原始帧坐标系下的一个检测。"""
+
     cx: float
     cy: float
     w: float
@@ -47,14 +47,20 @@ class Detection:
 class PlateDetector:
     """ONNX YOLO 杠铃片检测器（letterbox + 正确置信度解析）。"""
 
-    def __init__(self, model_path: str, input_size: int = 640,
-                 providers: list[str] | None = None):
+    def __init__(
+        self, model_path: str, input_size: int = 640, providers: list[str] | None = None
+    ):
+        # GPU 优先；GTX 1650 确认支持 CUDA 11.8
+        if providers is None:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         opts = ort.SessionOptions()
         opts.inter_op_num_threads = 1
         opts.intra_op_num_threads = max(1, (os.cpu_count() or 4) // 2)
         self.sess = ort.InferenceSession(
-            model_path, sess_options=opts,
-            providers=providers or ["CPUExecutionProvider"])
+            model_path,
+            sess_options=opts,
+            providers=providers or ["CPUExecutionProvider"],
+        )
         self.inp_name = self.sess.get_inputs()[0].name
         shape = self.sess.get_inputs()[0].shape
         self.size = int(shape[2]) if len(shape) >= 4 and shape[2] else input_size
@@ -63,7 +69,8 @@ class PlateDetector:
         if self.n_channels != 5:
             raise ValueError(
                 f"模型输出 {out_shape} 不是 [1,5,N] 单类格式（可能是旧 barbell_v4 导出），"
-                f"vbtcore 引擎不支持，请使用 yolo11_plate/plate_v1 或重新导出。")
+                f"vbtcore 引擎不支持，请使用 yolo11_plate/plate_v1 或重新导出。"
+            )
 
     def detect(self, frame: np.ndarray, conf_thresh: float = 0.20) -> list[Detection]:
         """全帧检测 → 原始帧坐标 Detection 列表。"""
@@ -75,8 +82,11 @@ class PlateDetector:
         dets: list[Detection] = []
         for i in np.where(keep)[0]:
             cx_o, cy_o, w_o, h_o = canvas_to_orig(
-                pp, float(row[0, i]), float(row[1, i]),
-                float(row[2, i]), float(row[3, i]))
-            dets.append(Detection(cx=cx_o, cy=cy_o, w=w_o, h=h_o,
-                                  conf=float(confs[i])))
+                pp,
+                float(row[0, i]),
+                float(row[1, i]),
+                float(row[2, i]),
+                float(row[3, i]),
+            )
+            dets.append(Detection(cx=cx_o, cy=cy_o, w=w_o, h=h_o, conf=float(confs[i])))
         return dets

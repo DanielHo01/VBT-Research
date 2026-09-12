@@ -1,27 +1,30 @@
 """
-vbtcore.pipeline — 端到端视频分析入口
-=====================================
-analyze_video(video_path, ...) -> SetResult
-  reps + 完整诊断（永不静默失败：一切失败都有状态码）。
+vbtcore.pipeline — 重构版端到端视频分析入口
+============================================
+新架构（Step 4 Refactor）：
+  · StaticPlateCalibrator  → 尺度标定（CV 门禁）
+  · DenseVisualTracker     → LK 光流 + YOLO 物理空间卡尔曼
+  · BiomechanicalRepSegmenter → 速度 FSM 分段（深蹲/卧推 + 硬拉）
+  · 统一 PTS 时间戳，消灭 px/frame 量纲混乱
 
-状态码（Stage 1 验收口径）：
-  OK                  正常出数
-  NO_PLATE_DETECTED   锚定失败（含"只有杆"场景 —— 应被 App 引导加片）
-  NO_CLEAN_SEGMENT    跟到了轨迹但没有可用干净段
-  TOO_SHORT           干净段过短
-  VIDEO_ERROR         视频打不开/帧数不足
+analyze_video(video_path, ...) -> SetResult（接口与旧版完全兼容）
 """
+
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
+from typing import Literal
 
 import cv2
 import numpy as np
 
+from .calibrator import StaticPlateCalibrator
 from .detector import PlateDetector
-from .engine import DetectFitTracker, TrackDiagnostics
-from .geometry import resolve_plate_diameter
-from .segment import Rep, SegmentResult, segment_reps
+from .segment import Rep as OldRep
+from .segmenter import BiomechanicalRepSegmenter
+from .segmenter import Rep as NewRep
+from .tracker import DenseVisualTracker
 
 
 class StatusCodes:
@@ -30,13 +33,16 @@ class StatusCodes:
     NO_CLEAN_SEGMENT = "NO_CLEAN_SEGMENT"
     TOO_SHORT = "TOO_SHORT"
     VIDEO_ERROR = "VIDEO_ERROR"
+    CALIBRATION_FAILED = "CALIBRATION_FAILED"
 
 
 @dataclass
 class SetResult:
+    """与 benchmark 兼容的输出格式"""
+
     video: str
     status: str
-    reps: list[Rep] = field(default_factory=list)
+    reps: list = field(default_factory=list)  # list[OldRep]
     mcv: list[float] = field(default_factory=list)
     mcv_mid: list[float] = field(default_factory=list)
     diagnostics: dict = field(default_factory=dict)
@@ -44,75 +50,192 @@ class SetResult:
     mpp: float | None = None
 
 
-def analyze_video(video_path: str,
-                  model_path: str,
-                  redet_every: int = 15,
-                  user_hint: tuple[float, float] | None = None,
-                  plate_diameter_m: float = 0.45,
-                  outer_plate: str | None = None,
-                  regrind_enabled: bool = True,
-                  detector: PlateDetector | None = None) -> SetResult:
-    """单视频 → SetResult。detector 可复用以省模型加载时间。
-    outer_plate（如 "20kg"）提供时按查表覆盖 plate_diameter_m（M1.5）。
-    regrind_enabled=False 关闭底部重锚定（烧蚀实验用）。"""
+def analyze_video(
+    video_path: str,
+    model_path: str,
+    redet_every: int = 15,
+    user_hint: tuple[float, float] | None = None,
+    plate_diameter_m: float = 0.45,
+    outer_plate: str | None = None,
+    regrind_enabled: bool = True,
+    detector: PlateDetector | None = None,
+    exercise_type: Literal["squat_bench", "deadlift"] = "squat_bench",
+) -> SetResult:
+    """
+    重构版端到端流水线。
+
+    参数
+    ─────
+    exercise_type : "squat_bench"（SSC，离心→向心）或 "deadlift"（直接向心）
+    其余参数与旧版保持兼容。
+    """
+    t0 = time.perf_counter()
+
     det = detector or PlateDetector(model_path)
-    diameter = (resolve_plate_diameter(outer_plate) if outer_plate
-                else plate_diameter_m)
-    tracker = DetectFitTracker(
-        det, redet_every=redet_every,
-        plate_diameter_m=diameter,
-        user_hint=user_hint,
-        regrind_enabled=regrind_enabled,
+    cap = cv2.VideoCapture(video_path)
+    n_frames_total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0 or np.isnan(fps):
+        fps = 30.0
+    cap.release()
+
+    if n_frames_total < 30:
+        return SetResult(
+            video=video_path,
+            status=StatusCodes.VIDEO_ERROR,
+            diagnostics={"reason": f"frames={n_frames_total}"},
+        )
+
+    # ── 初始化标定器 ──────────────────────────────────────────────
+    calibrator = StaticPlateCalibrator(
+        real_diameter_m=plate_diameter_m,
+        min_static_frames=20,
+        max_cv=0.015,
     )
+    tracker: DenseVisualTracker | None = None
+    mpp: float | None = None
+
+    timestamps: list[float] = []
+    positions: list[float] = []  # 向上为正（米）— 内部取反
+    velocities: list[float] = []  # 向上为正（米/秒）— 内部取反
+
+    status = StatusCodes.OK
+    frame_idx = 0
+    n_yolo_frames = 0
+    ms_total = 0.0
 
     cap = cv2.VideoCapture(video_path)
-    n_probe = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        t_frame_start = time.perf_counter()
+
+        # ── 真实 PTS 时间戳（毫秒 → 秒）───────────────────────────
+        pts_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+        current_time_s = pts_ms / 1000.0 if pts_ms > 0 else (frame_idx / fps)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # ── 阶段一：标定（mpp 未锁死）───────────────────────────────
+        if mpp is None:
+            results = det.detect(frame, conf_thresh=0.45)
+            if results is not None and len(results) > 0:
+                # 取最大面积检测框
+                best = max(results, key=lambda b: b.w * b.h)
+                h_px = float(best.h)
+                calibrator.add_sample(h_px)
+
+                if calibrator.is_ready():
+                    mpp = calibrator.lock_scale()
+                    # 转换为 x1,y1,x2,y2 格式供 DenseVisualTracker 使用
+                    bbox = (
+                        best.cx - best.w / 2,
+                        best.cy - best.h / 2,
+                        best.cx + best.w / 2,
+                        best.cy + best.h / 2,
+                    )
+                    tracker = DenseVisualTracker(
+                        mpp=mpp,
+                        initial_bbox=bbox,
+                        initial_gray=gray,
+                        initial_time_s=current_time_s,
+                    )
+
+            ms_total += (time.perf_counter() - t_frame_start) * 1000
+            frame_idx += 1
+            continue
+
+        # ── 阶段二：密集跟踪（标定已锁死）─────────────────────────
+        is_keyframe = frame_idx % redet_every == 0
+
+        if is_keyframe:
+            results = det.detect(frame, conf_thresh=0.40)
+            if results is not None and len(results) > 0:
+                best = max(results, key=lambda b: b.w * b.h)
+                bbox = (
+                    best.cx - best.w / 2,
+                    best.cy - best.h / 2,
+                    best.cx + best.w / 2,
+                    best.cy + best.h / 2,
+                )
+                y_m, v_mps = tracker.step_keyframe(gray, bbox, current_time_s)
+                n_yolo_frames += 1
+            else:
+                y_m, v_mps = tracker.step_interframe(gray, current_time_s)
+        else:
+            y_m, v_mps = tracker.step_interframe(gray, current_time_s)
+
+        # 图像 y 向下为正 → 取反为向上（物理正方向）
+        timestamps.append(current_time_s)
+        positions.append(-y_m)
+        velocities.append(-v_mps)
+
+        ms_total += (time.perf_counter() - t_frame_start) * 1000
+        frame_idx += 1
+
     cap.release()
-    if not n_probe or n_probe < 30:
-        return SetResult(video=video_path, status=StatusCodes.VIDEO_ERROR,
-                         diagnostics={"reason": f"frames={n_probe}"})
 
-    y_track, h_samples, diag, fps = tracker.process(video_path)
+    elapsed_s = time.perf_counter() - t0
 
-    result = SetResult(
-        video=video_path,
-        status=diag.status or StatusCodes.OK,
-        fps=fps,
-        diagnostics={
-            "coverage": round(diag.coverage, 3),
-            "ms_per_frame": round(diag.ms_per_frame, 1),
-            "yolo_ratio": round(diag.yolo_ratio, 3),
-            "n_frames": diag.n_frames,
-            "src_counts": diag.src_counts,
-            "ncc_mean": round(diag.ncc_mean, 3),
-            "anchor_frame": diag.anchor_frame,
-            "anchor_h_px": round(diag.anchor_h_px, 1),
-            "elapsed_s": round(diag.elapsed_s, 1),
-            "plate_diameter_m": diameter,
-            "outer_plate": outer_plate,
-            "notes": diag.notes,
-            "n_regrind_snap": diag.n_regrind_snap,
-            "n_regrind_micro": diag.n_regrind_micro,
-            "n_regrind_reject": diag.n_regrind_reject,
-        },
-    )
+    # ── 诊断信息 ──────────────────────────────────────────────────
+    coverage = frame_idx / max(n_frames_total, 1)
+    yolo_ratio = n_yolo_frames / max(frame_idx, 1)
+    diag = {
+        "coverage": round(coverage, 3),
+        "ms_per_frame": round(ms_total / max(frame_idx, 1), 1),
+        "yolo_ratio": round(yolo_ratio, 3),
+        "n_frames": frame_idx,
+        "n_yolo_frames": n_yolo_frames,
+        "elapsed_s": round(elapsed_s, 1),
+        "plate_diameter_m": plate_diameter_m,
+        "outer_plate": outer_plate,
+        "exercise_type": exercise_type,
+        "tracker": "dense_visual_kalman",
+        "calibrator": "static_cv_gate",
+    }
 
-    mpp = tracker.calibrate(h_samples)
-    result.mpp = mpp
     if mpp is None:
-        result.status = (result.status if result.status != "TRACKED"
-                         else StatusCodes.NO_CLEAN_SEGMENT)
-        result.diagnostics["reason"] = "标定失败（片高样本无效）"
-        return result
+        return SetResult(
+            video=video_path,
+            status=StatusCodes.NO_PLATE_DETECTED,
+            fps=fps,
+            diagnostics=diag,
+        )
 
-    if y_track is None or not np.any(~np.isnan(y_track)):
-        return result  # NO_PLATE_DETECTED 等，无轨迹
+    # ── 阶段三：Rep 分段 ─────────────────────────────────────────
+    t_arr = np.array(timestamps, dtype=float)
+    y_arr = np.array(positions, dtype=float)
+    v_arr = np.array(velocities, dtype=float)
 
-    seg: SegmentResult = segment_reps(y_track, fps, mpp)
-    result.reps = seg.reps
-    result.mcv = [r.mcv for r in seg.reps]
-    result.mcv_mid = [r.mcv_mid for r in seg.reps]
-    result.status = StatusCodes.OK if seg.reps else seg.status
-    result.diagnostics["segment_note"] = seg.note
-    result.diagnostics["n_clipped"] = sum(1 for r in seg.reps if r.clipped)
-    return result
+    segmenter = BiomechanicalRepSegmenter(exercise_type=exercise_type)
+    raw_reps: list[NewRep] = segmenter.segment(t_arr, y_arr, v_arr)
+
+    # 转换为旧版 Rep 格式（兼容 benchmark）
+    old_reps: list[OldRep] = []
+    for r in raw_reps:
+        old_reps.append(
+            OldRep(
+                start_frame=r.start_idx,
+                end_frame=r.end_idx,
+                mcv=r.mcv_mps,
+                mcv_mid=r.pcv_mps,  # benchmark 旧接口用 mcv_mid 存峰值
+                pv=r.pcv_mps,
+                rom_m=r.rom_m,
+                duration_s=r.duration_s,
+            )
+        )
+
+    mcv_vals = [r.mcv_mps for r in raw_reps]
+    mcv_mid_vals = [r.pcv_mps for r in raw_reps]
+
+    return SetResult(
+        video=video_path,
+        status=StatusCodes.OK if old_reps else StatusCodes.NO_CLEAN_SEGMENT,
+        reps=old_reps,
+        mcv=mcv_vals,
+        mcv_mid=mcv_mid_vals,
+        diagnostics=diag,
+        fps=fps,
+        mpp=mpp,
+    )

@@ -1,0 +1,159 @@
+{
+  "video_id": "110kg_0.45_0.48_0.33.mp4",
+  "config": {
+    "model_hash": "sha256:51589be9cf43394c",
+    "conf_thresh": 0.05,
+    "iou_thresh": 0.45,
+    "top_k": 5,
+    "version": "phase0-v3"
+  },
+  "metadata": {
+    "total_frames": 1291,
+    "fps": 30.0,
+    "duration_s": 43.033,
+    "width": 720,
+    "height": 1280,
+    "n_detected": 1277,
+    "n_missed": 14,
+    "elapsed_s": 70.35,
+    "fps_processing": 18.4
+  },
+  "total_frames": 1291,
+  "n_detected": 1277,
+  "n_missed": 14,
+  "n_present": 1291,
+  "n_absent": 0,
+  "VDR": 0.989156,
+  "VDR_present": 0.989156,
+  "max_gap": 9,
+  "track_loss": 2,
+  "n_critical_gaps": 1,
+  "critical_gaps": [
+    [
+      7,
+      15
+    ]
+  ],
+  "missed_segments": [
+    [
+      0,
+      0
+    ],
+    [
+      2,
+      5
+    ],
+    [
+      7,
+      15
+    ]
+  ],
+  "absent_segments": [],
+  "jump_summary": {
+    "total": 7,
+    "POS": 6,
+    "SCALE": 4,
+    "POS+SCALE": 3
+  },
+  "jump_frames": [
+    {
+      "frame_idx": 17,
+      "pts_s": 0.567,
+      "cx": 656.6441650390625,
+      "cy": 636.9248046875,
+      "h": 141.13543701171875,
+      "conf": 0.8739289045333862,
+      "jump_type": "SCALE",
+      "d_h_px": 38.9,
+      "ratio_h": 0.381
+    },
+    {
+      "frame_idx": 704,
+      "pts_s": 23.467,
+      "cx": 300.107421875,
+      "cy": 739.065673828125,
+      "h": 110.3814697265625,
+      "conf": 0.9206119775772095,
+      "jump_type": "POS",
+      "d_cx_px": 315.2,
+      "ratio_cx": 2.138
+    },
+    {
+      "frame_idx": 705,
+      "pts_s": 23.5,
+      "cx": 615.5714721679688,
+      "cy": 782.2977905273438,
+      "h": 147.2659912109375,
+      "conf": 0.9141808748245239,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 315.5,
+      "ratio_cx": 2.858,
+      "d_h_px": 36.9,
+      "ratio_h": 0.334
+    },
+    {
+      "frame_idx": 739,
+      "pts_s": 24.633,
+      "cx": 304.55291748046875,
+      "cy": 736.0375366210938,
+      "h": 111.1895751953125,
+      "conf": 0.9249166250228882,
+      "jump_type": "POS",
+      "d_cx_px": 320.4,
+      "ratio_cx": 2.14
+    },
+    {
+      "frame_idx": 740,
+      "pts_s": 24.667,
+      "cx": 624.4403076171875,
+      "cy": 753.9404907226562,
+      "h": 149.42529296875,
+      "conf": 0.9155117273330688,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 319.9,
+      "ratio_cx": 2.877,
+      "d_h_px": 38.2,
+      "ratio_h": 0.344
+    },
+    {
+      "frame_idx": 750,
+      "pts_s": 25.0,
+      "cx": 305.75323486328125,
+      "cy": 705.093994140625,
+      "h": 110.60467529296875,
+      "conf": 0.9235703349113464,
+      "jump_type": "POS",
+      "d_cx_px": 321.7,
+      "ratio_cx": 2.208
+    },
+    {
+      "frame_idx": 751,
+      "pts_s": 25.033,
+      "cx": 627.7321166992188,
+      "cy": 711.9171752929688,
+      "h": 144.2464599609375,
+      "conf": 0.9238251447677612,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 322.0,
+      "ratio_cx": 2.911,
+      "d_h_px": 33.6,
+      "ratio_h": 0.304
+    }
+  ],
+  "jump_rate": 0.005482,
+  "conf_curve": {
+    "VDR@0.01": 0.989156,
+    "VDR@0.05": 0.989156,
+    "VDR@0.10": 0.988381,
+    "VDR@0.20": 0.987607,
+    "VDR@0.30": 0.987607,
+    "VDR@0.40": 0.987607,
+    "VDR@0.50": 0.987607
+  },
+  "phase1_entry": {
+    "pass_vdr": false,
+    "pass_critical_gaps": false,
+    "pass_jump_rate": false,
+    "pass_all": false
+  }
+}

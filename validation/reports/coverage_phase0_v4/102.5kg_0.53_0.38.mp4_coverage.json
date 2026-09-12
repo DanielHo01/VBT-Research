@@ -1,0 +1,203 @@
+{
+  "video_id": "102.5kg_0.53_0.38.mp4",
+  "config": {
+    "model_hash": "sha256:51589be9cf43394c",
+    "conf_thresh": 0.05,
+    "iou_thresh": 0.45,
+    "top_k": 5,
+    "version": "phase0-v3"
+  },
+  "metadata": {
+    "total_frames": 727,
+    "fps": 30.0,
+    "duration_s": 24.233,
+    "width": 720,
+    "height": 1280,
+    "n_detected": 714,
+    "n_missed": 13,
+    "elapsed_s": 40.65,
+    "fps_processing": 17.9
+  },
+  "total_frames": 727,
+  "n_detected": 714,
+  "n_missed": 13,
+  "n_present": 727,
+  "n_absent": 0,
+  "VDR": 0.982118,
+  "VDR_present": 0.982118,
+  "max_gap": 11,
+  "track_loss": 1,
+  "n_critical_gaps": 1,
+  "critical_gaps": [
+    [
+      8,
+      18
+    ]
+  ],
+  "missed_segments": [
+    [
+      8,
+      18
+    ],
+    [
+      21,
+      22
+    ]
+  ],
+  "absent_segments": [],
+  "jump_summary": {
+    "total": 11,
+    "POS": 11,
+    "SCALE": 5,
+    "POS+SCALE": 5
+  },
+  "jump_frames": [
+    {
+      "frame_idx": 4,
+      "pts_s": 0.133,
+      "cx": 247.9619140625,
+      "cy": 632.1448974609375,
+      "h": 111.04998779296875,
+      "conf": 0.9060142040252686,
+      "jump_type": "POS",
+      "d_cx_px": 315.2,
+      "ratio_cx": 2.168
+    },
+    {
+      "frame_idx": 6,
+      "pts_s": 0.2,
+      "cx": 563.5988159179688,
+      "cy": 605.37353515625,
+      "h": 146.404052734375,
+      "conf": 0.9217944145202637,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 315.6,
+      "ratio_cx": 2.823,
+      "d_h_px": 34.6,
+      "ratio_h": 0.309
+    },
+    {
+      "frame_idx": 25,
+      "pts_s": 0.833,
+      "cx": 625.0244140625,
+      "cy": 612.6187744140625,
+      "h": 143.09832763671875,
+      "conf": 0.677585244178772,
+      "jump_type": "POS",
+      "d_cx_px": 365.1,
+      "ratio_cx": 3.203
+    },
+    {
+      "frame_idx": 257,
+      "pts_s": 8.567,
+      "cx": 311.6343994140625,
+      "cy": 738.966552734375,
+      "h": 110.14422607421875,
+      "conf": 0.9144265055656433,
+      "jump_type": "POS",
+      "d_cx_px": 321.3,
+      "ratio_cx": 2.162
+    },
+    {
+      "frame_idx": 258,
+      "pts_s": 8.6,
+      "cx": 630.8034057617188,
+      "cy": 745.4207763671875,
+      "h": 147.66986083984375,
+      "conf": 0.930239200592041,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 319.2,
+      "ratio_cx": 2.898,
+      "d_h_px": 37.5,
+      "ratio_h": 0.341
+    },
+    {
+      "frame_idx": 451,
+      "pts_s": 15.033,
+      "cx": 302.95697021484375,
+      "cy": 672.501708984375,
+      "h": 111.31256103515625,
+      "conf": 0.924463152885437,
+      "jump_type": "POS",
+      "d_cx_px": 323.3,
+      "ratio_cx": 2.212
+    },
+    {
+      "frame_idx": 452,
+      "pts_s": 15.067,
+      "cx": 626.8138427734375,
+      "cy": 683.3458251953125,
+      "h": 147.17169189453125,
+      "conf": 0.9301573038101196,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 323.9,
+      "ratio_cx": 2.909,
+      "d_h_px": 35.9,
+      "ratio_h": 0.322
+    },
+    {
+      "frame_idx": 549,
+      "pts_s": 18.3,
+      "cx": 307.6416015625,
+      "cy": 738.5927124023438,
+      "h": 110.2982177734375,
+      "conf": 0.9164409637451172,
+      "jump_type": "POS",
+      "d_cx_px": 320.2,
+      "ratio_cx": 2.141
+    },
+    {
+      "frame_idx": 550,
+      "pts_s": 18.333,
+      "cx": 627.7906494140625,
+      "cy": 750.73779296875,
+      "h": 147.581787109375,
+      "conf": 0.9213474988937378,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 320.1,
+      "ratio_cx": 2.903,
+      "d_h_px": 37.3,
+      "ratio_h": 0.338
+    },
+    {
+      "frame_idx": 685,
+      "pts_s": 22.833,
+      "cx": 336.240966796875,
+      "cy": 625.9334106445312,
+      "h": 106.861572265625,
+      "conf": 0.9117119312286377,
+      "jump_type": "POS",
+      "d_cx_px": 327.9,
+      "ratio_cx": 2.253
+    },
+    {
+      "frame_idx": 699,
+      "pts_s": 23.3,
+      "cx": 673.520751953125,
+      "cy": 636.5465087890625,
+      "h": 147.83526611328125,
+      "conf": 0.9022468328475952,
+      "jump_type": "POS+SCALE",
+      "d_cx_px": 321.6,
+      "ratio_cx": 3.072,
+      "d_h_px": 43.2,
+      "ratio_h": 0.412
+    }
+  ],
+  "jump_rate": 0.015406,
+  "conf_curve": {
+    "VDR@0.01": 0.982118,
+    "VDR@0.05": 0.982118,
+    "VDR@0.10": 0.980743,
+    "VDR@0.20": 0.979367,
+    "VDR@0.30": 0.979367,
+    "VDR@0.40": 0.979367,
+    "VDR@0.50": 0.977992
+  },
+  "phase1_entry": {
+    "pass_vdr": false,
+    "pass_critical_gaps": false,
+    "pass_jump_rate": false,
+    "pass_all": false
+  }
+}

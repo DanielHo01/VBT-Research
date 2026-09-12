@@ -1,0 +1,79 @@
+{
+  "video_id": "20kg_0.87_0.88_0.89_0.91.mp4",
+  "config": {
+    "model_hash": "sha256:51589be9cf43394c",
+    "conf_thresh": 0.05,
+    "iou_thresh": 0.45,
+    "top_k": 5,
+    "version": "phase0-v3"
+  },
+  "metadata": {
+    "total_frames": 391,
+    "fps": 30.0,
+    "duration_s": 13.033,
+    "width": 720,
+    "height": 1280,
+    "n_detected": 2,
+    "n_missed": 389,
+    "elapsed_s": 21.39,
+    "fps_processing": 18.3
+  },
+  "total_frames": 391,
+  "n_detected": 2,
+  "n_missed": 389,
+  "n_present": 391,
+  "n_absent": 0,
+  "VDR": 0.005115,
+  "VDR_present": 0.005115,
+  "max_gap": 311,
+  "track_loss": 2,
+  "n_critical_gaps": 2,
+  "critical_gaps": [
+    [
+      0,
+      310
+    ],
+    [
+      314,
+      390
+    ]
+  ],
+  "missed_segments": [
+    [
+      0,
+      310
+    ],
+    [
+      312,
+      312
+    ],
+    [
+      314,
+      390
+    ]
+  ],
+  "absent_segments": [],
+  "jump_summary": {
+    "total": 0,
+    "POS": 0,
+    "SCALE": 0,
+    "POS+SCALE": 0
+  },
+  "jump_frames": [],
+  "jump_rate": 0.0,
+  "conf_curve": {
+    "VDR@0.01": 0.005115,
+    "VDR@0.05": 0.005115,
+    "VDR@0.10": 0.002558,
+    "VDR@0.20": 0.0,
+    "VDR@0.30": 0.0,
+    "VDR@0.40": 0.0,
+    "VDR@0.50": 0.0
+  },
+  "phase1_entry": {
+    "pass_vdr": false,
+    "pass_critical_gaps": false,
+    "pass_jump_rate": true,
+    "pass_all": false
+  }
+}
