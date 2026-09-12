@@ -49,23 +49,25 @@ def test_canvas_to_orig_letterbox_roundtrip():
 
 
 def test_canvas_to_orig_rotated_swaps_and_maps():
-    """旋转分支：竖屏帧，检测框中心必须按 x=y', y=H-1-x' 映射，宽高互换。"""
+    """Step 4 Refactor 后：竖屏帧走纯 letterbox 不旋转路径。
+    （原旋转分支已被废除——训练数据 720×1280 竖屏直接 letterbox 即可，
+    旋转逆映射的坐标系镜像 bug 一并消除。）"""
     frame = np.zeros((1280, 720, 3), dtype=np.uint8)  # 竖屏
     pp = preprocess(frame, 640)
-    assert pp.rotated is True
-    # 在 canvas 坐标 (400, 300) 放一个 w=30,h=50 的框（canvas 坐标系=旋转帧缩放）
+    # 新架构：所有方向统一走 letterbox，不旋转
+    assert pp.rotated is False
+    # canvas 坐标 (400, 300) 放一个 w=30, h=50 的框，验证 letterbox 反向映射
     cx_c, cy_c, w_c, h_c = 400.0, 300.0, 30.0, 50.0
-    # 先转旋转帧坐标
-    x_rot = (cx_c - pp.xo) / pp.scale
-    y_rot = (cy_c - pp.yo) / pp.scale
-    w_rot = w_c / pp.scale
-    h_rot = h_c / pp.scale
     cx_o, cy_o, w_o, h_o = canvas_to_orig(pp, cx_c, cy_c, w_c, h_c)
-    # 旋转分支：orig_x = y_rot, orig_y = H - x_rot，且 w/h 互换
-    assert abs(cx_o - y_rot) < 1e-6
-    assert abs(cy_o - (1280 - x_rot)) < 1e-6
-    assert abs(w_o - h_rot) < 1e-6
-    assert abs(h_o - w_rot) < 1e-6
+    # letterbox 分支：orig = (canvas - offset) / scale，w/h 不互换
+    expected_cx = (cx_c - pp.xo) / pp.scale
+    expected_cy = (cy_c - pp.yo) / pp.scale
+    expected_w = w_c / pp.scale
+    expected_h = h_c / pp.scale
+    assert abs(cx_o - expected_cx) < 1e-6, f"cx_o={cx_o} vs {expected_cx}"
+    assert abs(cy_o - expected_cy) < 1e-6, f"cy_o={cy_o} vs {expected_cy}"
+    assert abs(w_o - expected_w) < 1e-6, f"w_o={w_o} vs {expected_w}"
+    assert abs(h_o - expected_h) < 1e-6, f"h_o={h_o} vs {expected_h}"
 
 
 def test_preprocess_no_squeeze():
