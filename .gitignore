@@ -15,8 +15,10 @@ datasets/owlvit_pseudo/
 datasets/interactive_labels/
 datasets/barbell_dataset/   # 728 annotated frames (too large)
 
-# Archives — old experiment debris
+# Archives — old experiment debris (但 vbtcore 历史模块须可追踪，供 1 个 release 周期回滚)
 _archive/
+!_archive/vbtcore_history/
+!_archive/vbtcore_history/*.py
 archives/
 
 # Python

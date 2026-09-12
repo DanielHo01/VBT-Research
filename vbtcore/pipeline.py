@@ -21,9 +21,8 @@ import numpy as np
 
 from .calibrator import StaticPlateCalibrator
 from .detector import PlateDetector
-from .segment import Rep as OldRep
 from .segmenter import BiomechanicalRepSegmenter
-from .segmenter import Rep as NewRep
+from .segmenter import Rep
 from .tracker import DenseVisualTracker
 
 
@@ -42,7 +41,7 @@ class SetResult:
 
     video: str
     status: str
-    reps: list = field(default_factory=list)  # list[OldRep]
+    reps: list = field(default_factory=list)  # list[Rep] (segmenter.Rep)
     mcv: list[float] = field(default_factory=list)
     mcv_mid: list[float] = field(default_factory=list)
     diagnostics: dict = field(default_factory=dict)
@@ -209,30 +208,15 @@ def analyze_video(
     v_arr = np.array(velocities, dtype=float)
 
     segmenter = BiomechanicalRepSegmenter(exercise_type=exercise_type)
-    raw_reps: list[NewRep] = segmenter.segment(t_arr, y_arr, v_arr)
-
-    # 转换为旧版 Rep 格式（兼容 benchmark）
-    old_reps: list[OldRep] = []
-    for r in raw_reps:
-        old_reps.append(
-            OldRep(
-                start_frame=r.start_idx,
-                end_frame=r.end_idx,
-                mcv=r.mcv_mps,
-                mcv_mid=r.pcv_mps,  # benchmark 旧接口用 mcv_mid 存峰值
-                pv=r.pcv_mps,
-                rom_m=r.rom_m,
-                duration_s=r.duration_s,
-            )
-        )
+    raw_reps: list[Rep] = segmenter.segment(t_arr, y_arr, v_arr)
 
     mcv_vals = [r.mcv_mps for r in raw_reps]
     mcv_mid_vals = [r.pcv_mps for r in raw_reps]
 
     return SetResult(
         video=video_path,
-        status=StatusCodes.OK if old_reps else StatusCodes.NO_CLEAN_SEGMENT,
-        reps=old_reps,
+        status=StatusCodes.OK if raw_reps else StatusCodes.NO_CLEAN_SEGMENT,
+        reps=raw_reps,
         mcv=mcv_vals,
         mcv_mid=mcv_mid_vals,
         diagnostics=diag,
