@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <map>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -91,7 +90,7 @@ int main(int argc, char** argv) {
 
     for (const auto& video_path : videos) {
         const auto video_id = fs::path(video_path).stem().string();
-        const std::string baseline_path = baseline_dir + "/" + video_id + ".json";
+        const std::string baseline_path = baseline_dir + "/" + video_id + ".mp4.json";
 
         std::printf("▶ %s ... ", video_id.c_str());
         std::fflush(stdout);
