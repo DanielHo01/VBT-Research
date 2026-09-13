@@ -1,0 +1,17 @@
+{
+  "video": "20kg_0.87_0.88_0.89_0.91.mp4",
+  "status": "NO_PLATE_DETECTED",
+  "fps": 30.0,
+  "mpp": null,
+  "reps": [],
+  "diagnostics": {
+    "n_frames": 391,
+    "n_yolo": 0,
+    "elapsed_s": 24.1,
+    "coverage": 1.0,
+    "ms_per_frame": 58.6,
+    "yolo_ratio": 0.0,
+    "plate_diameter_m": 0.45,
+    "exercise_type": "squat_bench"
+  }
+}

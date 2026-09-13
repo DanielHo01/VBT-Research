@@ -1,0 +1,58 @@
+{
+  "video": "30kg_1.03_0.89_0.76_0.65.mp4",
+  "status": "OK",
+  "fps": 30.0,
+  "mpp": 0.002592,
+  "reps": [
+    {
+      "start_idx": 33,
+      "end_idx": 59,
+      "start_time": 1.767,
+      "end_time": 2.633,
+      "duration_s": 0.867,
+      "rom_m": 0.6334,
+      "mcv_mps": 0.731,
+      "pcv_mps": 1.239
+    },
+    {
+      "start_idx": 119,
+      "end_idx": 136,
+      "start_time": 4.633,
+      "end_time": 5.2,
+      "duration_s": 0.567,
+      "rom_m": 0.5501,
+      "mcv_mps": 0.971,
+      "pcv_mps": 2.15
+    },
+    {
+      "start_idx": 194,
+      "end_idx": 213,
+      "start_time": 7.133,
+      "end_time": 7.767,
+      "duration_s": 0.633,
+      "rom_m": 0.631,
+      "mcv_mps": 0.996,
+      "pcv_mps": 2.35
+    },
+    {
+      "start_idx": 269,
+      "end_idx": 287,
+      "start_time": 9.633,
+      "end_time": 10.233,
+      "duration_s": 0.6,
+      "rom_m": 0.5593,
+      "mcv_mps": 0.932,
+      "pcv_mps": 1.914
+    }
+  ],
+  "diagnostics": {
+    "n_frames": 334,
+    "n_yolo": 21,
+    "elapsed_s": 5.6,
+    "coverage": 1.0,
+    "ms_per_frame": 13.5,
+    "yolo_ratio": 0.063,
+    "plate_diameter_m": 0.45,
+    "exercise_type": "squat_bench"
+  }
+}
