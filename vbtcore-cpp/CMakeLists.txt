@@ -62,13 +62,14 @@ if(NOT TARGET OpenCV::dnn)
 endif()
 
 # ONNX Runtime C++ API（必须预编译 NDK 版本）
+# ONNX Runtime 安装在 ${ONNXRUNTIME_ROOT}/onnxruntime/{include,lib}
 find_path(ONNXRUNTIME_INCLUDE_DIR
     NAMES onnxruntime_cxx_api.h
-    PATHS ${ONNXRUNTIME_ROOT} ${ANDROID_NDK}/../onnxruntime
+    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/include ${ANDROID_NDK}/../onnxruntime/include
     DOC "ONNX Runtime C++ API header")
 find_library(ONNXRUNTIME_LIB
     NAMES onnxruntime
-    PATHS ${ONNXRUNTIME_ROOT} ${ANDROID_NDK}/../onnxruntime
+    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/lib ${ANDROID_NDK}/../onnxruntime/lib
     DOC "ONNX Runtime shared library")
 
 if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIB)
