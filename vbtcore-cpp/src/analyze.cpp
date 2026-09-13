@@ -49,12 +49,12 @@ nlohmann::json reps_to_json(const std::vector<Rep>& reps) {
         nlohmann::json item;
         item["start_idx"] = r.start_idx;
         item["end_idx"] = r.end_idx;
-        item["start_time"] = fmt(r.start_time);
-        item["end_time"] = fmt(r.end_time);
-        item["duration_s"] = fmt(r.duration_s);
-        item["rom_m"] = fmt(r.rom_m);
-        item["mcv_mps"] = fmt(r.mcv_mps);
-        item["pcv_mps"] = fmt(r.pcv_mps);
+        item["start_time"] = r.start_time;
+        item["end_time"] = r.end_time;
+        item["duration_s"] = r.duration_s;
+        item["rom_m"] = r.rom_m;
+        item["mcv_mps"] = r.mcv_mps;
+        item["pcv_mps"] = r.pcv_mps;
         arr.push_back(item);
     }
     return arr;
@@ -222,6 +222,49 @@ std::string analyze_video_json(const std::string& video_path,
     diag["redet_every"] = opts.redet_every;
     diag["tracker"] = "dense_visual_kalman";
     diag["calibrator"] = "static_cv_gate";
+
+    // Velocity diagnostics (to debug segmenter issues)
+    if (!velocities_mps.empty()) {
+        double v_min = velocities_mps[0], v_max = velocities_mps[0], v_sum = 0.0;
+        double v_sum2 = 0.0;
+        int v_pos = 0, v_neg = 0, v_zero = 0;
+        for (double v : velocities_mps) {
+            if (std::isnan(v)) continue;
+            if (v < v_min) v_min = v;
+            if (v > v_max) v_max = v;
+            v_sum += v;
+            v_sum2 += v * v;
+            if (v > 0.01) v_pos++;
+            else if (v < -0.01) v_neg++;
+            else v_zero++;
+        }
+        const std::size_t valid_count = v_pos + v_neg + v_zero;
+        const double v_mean = valid_count > 0 ? v_sum / valid_count : 0.0;
+        const double v_var = valid_count > 0 ? v_sum2 / valid_count - v_mean * v_mean : 0.0;
+        diag["v_min"] = fmt(v_min);
+        diag["v_max"] = fmt(v_max);
+        diag["v_mean"] = fmt(v_mean);
+        diag["v_std"] = fmt(std::sqrt(std::max(0.0, v_var)));
+        diag["v_pos_frames"] = v_pos;
+        diag["v_neg_frames"] = v_neg;
+        diag["v_zero_frames"] = v_zero;
+        diag["v_total_valid"] = static_cast<int>(valid_count);
+
+        if (!positions_m.empty()) {
+            double y_min = positions_m[0], y_max = positions_m[0];
+            int nan_count = 0;
+            for (double y : positions_m) {
+                if (std::isnan(y)) { nan_count++; continue; }
+                if (y < y_min) y_min = y;
+                if (y > y_max) y_max = y;
+            }
+            diag["y_min"] = fmt(y_min);
+            diag["y_max"] = fmt(y_max);
+            diag["y_range"] = fmt(y_max - y_min);
+            diag["y_nan_count"] = nan_count;
+        }
+    }
+
     result["diagnostics"] = diag;
     return result.dump();
 }
