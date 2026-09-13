@@ -8,6 +8,7 @@
   from vbtcore.segment import segment_reps   # ← 仍可用但会警告
   from vbtcore.segmenter import BiomechanicalRepSegmenter  # ← 新代码路径
 """
+
 from __future__ import annotations
 
 import importlib
@@ -17,9 +18,7 @@ from pathlib import Path
 
 # Locate the archived module file (3 parents up + sibling)
 _HERE = Path(__file__).resolve().parent
-_ARCHIVE_FILE = (
-    _HERE.parent / "_archive" / "vbtcore_history" / "segment_v3_savgol.py"
-)
+_ARCHIVE_FILE = _HERE.parent / "_archive" / "vbtcore_history" / "segment_v3_savgol.py"
 
 if _ARCHIVE_FILE.exists():
     # Use importlib spec to load the archived module under its old name

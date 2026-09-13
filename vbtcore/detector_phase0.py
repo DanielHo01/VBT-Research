@@ -8,6 +8,7 @@
 （带 letterbox + 置信度 sigmoid 修复）替代。覆盖率审计脚本（coverage_audit.py）
 仍通过此 shim 调用，便于历史审计数据复现。
 """
+
 from __future__ import annotations
 
 import importlib.util as _ilu
@@ -19,23 +20,23 @@ _HERE = _P(__file__).resolve().parent
 _ARCHIVE_FILE = _HERE.parent / "_archive" / "vbtcore_history" / "detector_phase0_v0.py"
 
 _w.warn(
-    "vbtcore.detector_phase0 已废弃（v0.1.0-baseline 起归档至 "
-    "_archive/vbtcore_history/detector_phase0_v0.py）。"
-    "生产代码请使用 vbtcore.PlateDetector；"
-    "覆盖率审计脚本（scripts/coverage_audit.py）仍可引用此模块。",
-    DeprecationWarning,
-    stacklevel=2,
+  "vbtcore.detector_phase0 已废弃（v0.1.0-baseline 起归档至 "
+  "_archive/vbtcore_history/detector_phase0_v0.py）。"
+  "生产代码请使用 vbtcore.PlateDetector；"
+  "覆盖率审计脚本（scripts/coverage_audit.py）仍可引用此模块。",
+  DeprecationWarning,
+  stacklevel=2,
 )
 
 if _ARCHIVE_FILE.exists():
-    spec = _ilu.spec_from_file_location(
-        "vbtcore._archive_detector_phase0_v0", str(_ARCHIVE_FILE)
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"无法从 {_ARCHIVE_FILE} 加载归档模块")
-    _mod = _ilu.module_from_spec(spec)
-    _sys.modules["vbtcore._archive_detector_phase0_v0"] = _mod
-    _sys.modules[__name__] = _mod
-    spec.loader.exec_module(_mod)
+  spec = _ilu.spec_from_file_location(
+    "vbtcore._archive_detector_phase0_v0", str(_ARCHIVE_FILE)
+  )
+  if spec is None or spec.loader is None:
+    raise ImportError(f"无法从 {_ARCHIVE_FILE} 加载归档模块")
+  _mod = _ilu.module_from_spec(spec)
+  _sys.modules["vbtcore._archive_detector_phase0_v0"] = _mod
+  _sys.modules[__name__] = _mod
+  spec.loader.exec_module(_mod)
 else:
-    raise ImportError(f"归档模块不存在：{_ARCHIVE_FILE}")
+  raise ImportError(f"归档模块不存在：{_ARCHIVE_FILE}")
