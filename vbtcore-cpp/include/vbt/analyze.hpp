@@ -5,7 +5,6 @@
 // 输入：mp4 路径 + ONNX 模型路径
 // 输出：JSON 字符串（包含 rep 列表 + 诊断）
 
-#include <cstdint>
 #include <string>
 
 namespace vbt {
@@ -17,7 +16,7 @@ struct AnalyzeOptions {
     const char* outer_plate = nullptr; ///< 外层片规格（如 "20kg"，nullptr=默认）
     const char* exercise_type = "squat_bench";  ///< "squat_bench" 或 "deadlift"
     double conf_thresh = 0.40;         ///< YOLO 置信度门限
-    int conf_thresh_calibrate = 0.45;  ///< 标定期 YOLO 置信度门限（更高）
+    double conf_thresh_calibrate = 0.45;  ///< 标定期 YOLO 置信度门限（更高）
 };
 
 /// 端到端视频分析（mp4 → JSON）。

@@ -17,7 +17,7 @@ namespace vbt {
 ///   - R: 观测噪声（4.0 默认）
 class BarbellKalmanTracker {
 public:
-    BarbellKalmanTracker(double initial_y,
+    BarbellKalmanTracker(double initial_y = 0.0,
                          double dt = 1.0 / 120.0,
                          double Q = 0.01,
                          double R = 4.0);
