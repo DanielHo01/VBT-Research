@@ -8,6 +8,7 @@
 vbtcore.pipeline.analyze_video 替代（直接 LK 光流 + 物理空间卡尔曼，
 不再需要 DetectFitTracker 的稀疏 NCC 模板拟合）。
 """
+
 from __future__ import annotations
 
 import importlib.util as _ilu
@@ -19,20 +20,18 @@ _HERE = _P(__file__).resolve().parent
 _ARCHIVE_FILE = _HERE.parent / "_archive" / "vbtcore_history" / "engine_v2_reverted.py"
 
 _w.warn(
-    "vbtcore.engine 已废弃（v0.1.0-baseline 起归档至 "
-    "_archive/vbtcore_history/engine_v2_reverted.py）。"
-    "新代码请使用 vbtcore.analyze_video() 或 vbtcore.DenseVisualTracker。",
-    DeprecationWarning,
-    stacklevel=2,
+  "vbtcore.engine 已废弃（v0.1.0-baseline 起归档至 "
+  "_archive/vbtcore_history/engine_v2_reverted.py）。"
+  "新代码请使用 vbtcore.analyze_video() 或 vbtcore.DenseVisualTracker。",
+  DeprecationWarning,
+  stacklevel=2,
 )
 
 if _ARCHIVE_FILE.exists():
-    spec = _ilu.spec_from_file_location(
-        "vbtcore._archive_engine_v2", str(_ARCHIVE_FILE)
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"无法从 {_ARCHIVE_FILE} 加载归档模块")
-    _mod = _ilu.module_from_spec(spec)
-    _sys.modules["vbtcore._archive_engine_v2"] = _mod
-    _sys.modules[__name__] = _mod  # 关键：注册到当前模块名
-    spec.loader.exec_module(_mod)
+  spec = _ilu.spec_from_file_location("vbtcore._archive_engine_v2", str(_ARCHIVE_FILE))
+  if spec is None or spec.loader is None:
+    raise ImportError(f"无法从 {_ARCHIVE_FILE} 加载归档模块")
+  _mod = _ilu.module_from_spec(spec)
+  _sys.modules["vbtcore._archive_engine_v2"] = _mod
+  _sys.modules[__name__] = _mod  # 关键：注册到当前模块名
+  spec.loader.exec_module(_mod)

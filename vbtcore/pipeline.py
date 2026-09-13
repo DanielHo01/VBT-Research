@@ -21,8 +21,7 @@ import numpy as np
 
 from .calibrator import StaticPlateCalibrator
 from .detector import PlateDetector
-from .segmenter import BiomechanicalRepSegmenter
-from .segmenter import Rep
+from .segmenter import BiomechanicalRepSegmenter, Rep
 from .tracker import DenseVisualTracker
 
 
