@@ -55,6 +55,10 @@ if(NOT TARGET OpenCV::dnn)
     add_library(OpenCV::dnn INTERFACE IMPORTED)
     set_target_properties(OpenCV::dnn PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+    if(OpenCV_DNN_LIBRARIES)
+        set_target_properties(OpenCV::dnn PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${OpenCV_DNN_LIBRARIES}")
+    endif()
 endif()
 
 # ONNX Runtime C++ API（必须预编译 NDK 版本）
