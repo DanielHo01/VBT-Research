@@ -54,17 +54,17 @@ bool fit_plate_ellipse(
     int k = std::max(3, (std::min(width, height) / 16) * 2 + 1);
     cv::GaussianBlur(gray, blurred, cv::Size(k, k), 0);
 
-    cv::threshold(blurred, binary, 0, 255, THRESH_BINARY | THRESH_OTSU);
+    cv::threshold(blurred, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
     cv::Canny(blurred, edges, 50, 150);
 
-    cv::Mat kernel = cv::getStructuringElement(MORPH_ELLIPSE, cv::Size(3, 3));
-    cv::morphologyEx(edges, closed, MORPH_CLOSE, kernel);
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::morphologyEx(edges, closed, cv::MORPH_CLOSE, kernel);
 
     std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(closed, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+    cv::findContours(closed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
     if (contours.empty()) {
         // Fallback: use binary mask
-        cv::findContours(binary, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
     }
     if (contours.empty()) {
         return false;
