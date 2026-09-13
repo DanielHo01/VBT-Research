@@ -23,7 +23,7 @@ if(NOT DEFINED VBT_DEPLOY_DIR)
 endif()
 
 # ── 依赖 ──────────────────────────────────────────────────────────
-find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio dnn)
+find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
 
 # Ubuntu 22.04 apt OpenCV 4.5.4 不导出 OpenCV::core/imgproc 现代目标
 # → 找不到时手动建 fallback
