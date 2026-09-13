@@ -51,7 +51,7 @@ class SetResult:
 def analyze_video(
     video_path: str,
     model_path: str,
-    redet_every: int = 15,
+    redet_every: int = 1,
     user_hint: tuple[float, float] | None = None,
     plate_diameter_m: float = 0.45,
     outer_plate: str | None = None,
@@ -143,6 +143,10 @@ def analyze_video(
             ms_total += (time.perf_counter() - t_frame_start) * 1000
             frame_idx += 1
             continue
+
+        # mpp 和 tracker 在上方的 if mpp is None 分支里同步赋值，
+        # 到这里两者必不为 None（continue 截断了赋值的另一条路径）。
+        assert tracker is not None  # type: ignore[unreachable]
 
         # ── 阶段二：密集跟踪（标定已锁死）─────────────────────────
         is_keyframe = frame_idx % redet_every == 0

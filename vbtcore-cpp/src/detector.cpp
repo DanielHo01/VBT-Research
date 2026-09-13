@@ -156,14 +156,19 @@ struct PlateDetector::Impl {
 #if defined(VBT_HAS_ONNXRUNTIME) && VBT_HAS_ONNXRUNTIME
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(2);
-        Ort::ThrowOnError(Ort::GetApi().CreateSessionOptions());
         session = std::make_unique<Ort::Session>(
             env, model_path.c_str(), session_options);
         Ort::AllocatorWithDefaultOptions allocator;
-        const auto in_names = session->GetInputNames();
-        const auto out_names = session->GetOutputNames();
-        for (auto* n : in_names) input_names.push_back(n);
-        for (auto* n : out_names) output_names.push_back(n);
+        const size_t num_inputs = session->GetInputCount();
+        const size_t num_outputs = session->GetOutputCount();
+        for (size_t i = 0; i < num_inputs; ++i) {
+            auto name = session->GetInputNameAllocated(i, allocator);
+            input_names.emplace_back(name.get());
+        }
+        for (size_t i = 0; i < num_outputs; ++i) {
+            auto name = session->GetOutputNameAllocated(i, allocator);
+            output_names.emplace_back(name.get());
+        }
         (void)providers;
 #else
         (void)model_path;
@@ -193,7 +198,7 @@ std::vector<Detection> PlateDetector::detect(const cv::Mat& frame_bgr,
 
     // 创建输入 tensor
     Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(
-        Ort::ArenaAllocator, Ort::MemTypeDefault);
+        OrtArenaAllocator, OrtMemTypeDefault);
     std::vector<int64_t> input_shape = {1, 3, 640, 640};
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
         mem_info, blob.ptr<float>(), blob.total() * sizeof(float),

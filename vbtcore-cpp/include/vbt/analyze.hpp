@@ -11,7 +11,7 @@ namespace vbt {
 
 /// 分析选项。
 struct AnalyzeOptions {
-    int redet_every = 15;              ///< YOLO 重检测间隔（帧）
+    int redet_every = 1;               ///< YOLO 重检测间隔（帧）；stride=1 彻底消除阶梯函数空洞
     double plate_diameter_m = 0.45;    ///< 外层片直径（米）
     const char* outer_plate = nullptr; ///< 外层片规格（如 "20kg"，nullptr=默认）
     const char* exercise_type = "squat_bench";  ///< "squat_bench" 或 "deadlift"
