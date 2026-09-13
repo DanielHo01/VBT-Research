@@ -138,9 +138,18 @@ PreprocessResult preprocess(const cv::Mat& frame, int size) {
         std::memcpy(dst_row, src_row, nw * 3);
     }
 
-    // Convert to (1, 3, S, S) float32 via blobFromImage
+    // Manual HWC→CHW conversion (bgr, 0-255 → float32, 0-1)
+    // Equivalent to Python: np.transpose(frame, (2,0,1))[np.newaxis,...] / 255.0
+    // Avoids cv::dnn::blobFromImage (OpenCV 4.5 uses versioned dnn4_v20211004 namespace)
+    cv::Mat floatCanvas;
+    canvas.convertTo(floatCanvas, CV_32F, 1.0 / 255.0);  // (S,S,3) float32 [0,1]
+    std::vector<cv::Mat> channels;
+    cv::split(floatCanvas, channels);  // channels[0]=B, [1]=G, [2]=R
     cv::Mat chw;
-    cv::dnn::blobFromImage(canvas, chw, 1.0 / 255.0);
+    cv::vconcat(channels, chw);  // (3,S,S) — B|G|R vertically stacked
+    cv::Mat blob = chw.reshape(1, {1, 3, size, size});  // (1,3,S,S)
+
+    result.scale = scale;
 
     result.scale = scale;
     result.xo = xo;
