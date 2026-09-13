@@ -8,11 +8,11 @@
 #include <cctype>
 #include <cstdint>
 
-// OpenCV（core + imgproc + imgcodecs）
-// OpenCV 4 (pkg-config: opencv4 → /usr/include/opencv4)
-// 若编译失败，检查: pkg-config --cflags opencv4
+// OpenCV 4: CV_8UC3 / COLOR_BGR2GRAY 等是全局宏，不加 cv:: 前缀
+// dnn::blobFromImage 在 opencv2/dnn/dnn.hpp（子目录）
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/dnn/dnn.hpp>
 
 namespace vbt {
 
@@ -45,7 +45,7 @@ bool fit_plate_ellipse(
         return false;
     }
     // Wrap raw BGR buffer as cv::Mat (no copy).
-    cv::Mat crop(height, width, cv::CV_8UC3,
+    cv::Mat crop(height, width, CV_8UC3,
                  const_cast<uint8_t*>(bgr_data), row_stride_bytes);
 
     cv::Mat gray, blurred, binary, edges, closed;
@@ -54,17 +54,17 @@ bool fit_plate_ellipse(
     int k = std::max(3, (std::min(width, height) / 16) * 2 + 1);
     cv::GaussianBlur(gray, blurred, cv::Size(k, k), 0);
 
-    cv::threshold(blurred, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    cv::threshold(blurred, binary, 0, 255, THRESH_BINARY | THRESH_OTSU);
     cv::Canny(blurred, edges, 50, 150);
 
-    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(3, 3));
-    cv::morphologyEx(edges, closed, cv::MORPH_CLOSE, kernel);
+    cv::Mat kernel = cv::getStructuringElement(MORPH_ELLIPSE, cv::Size(3, 3));
+    cv::morphologyEx(edges, closed, MORPH_CLOSE, kernel);
 
     std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(closed, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(closed, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
     if (contours.empty()) {
         // Fallback: use binary mask
-        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        cv::findContours(binary, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
     }
     if (contours.empty()) {
         return false;
@@ -126,7 +126,7 @@ PreprocessResult preprocess(const cv::Mat& frame, int size) {
     const int xo = (size - nw) / 2;
 
     // Letterbox canvas (gray 114, BGR)
-    cv::Mat canvas(size, size, cv::CV_8UC3, cv::Scalar(114, 114, 114));
+    cv::Mat canvas(size, size, CV_8UC3, cv::Scalar(114, 114, 114));
     cv::Mat resized;
     cv::resize(frame, resized, cv::Size(nw, nh));
 
