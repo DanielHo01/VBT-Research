@@ -8,9 +8,11 @@
 #include <cctype>
 #include <cstdint>
 
-// OpenCV core（cv::Mat / cv::cvtColor / cv::fitEllipse 等）
-// imgcodecs/imgproc 在 stub 中已通过 core.hpp 转发，生产环境链接真实 OpenCV。
+// OpenCV（core + imgproc + imgcodecs）
+// OpenCV 4 (pkg-config: opencv4 → /usr/include/opencv4)
+// 若编译失败，检查: pkg-config --cflags opencv4
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
 namespace vbt {
 
