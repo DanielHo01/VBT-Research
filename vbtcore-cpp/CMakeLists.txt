@@ -84,6 +84,7 @@ add_library(vbtcore STATIC
     src/kalman.cpp
     src/segmenter.cpp
     src/tracker.cpp
+    src/calibrator.cpp
     src/analyze.cpp
     src/detector.cpp
 )
@@ -94,7 +95,7 @@ target_include_directories(vbtcore
         ${JSON_INCLUDE_DIR}
 )
 target_link_libraries(vbtcore
-    PUBLIC OpenCV::core OpenCV::imgproc
+    PUBLIC OpenCV::core OpenCV::imgproc OpenCV::dnn
 )
 if(VBT_HAS_ONNXRUNTIME)
     target_include_directories(vbtcore PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
