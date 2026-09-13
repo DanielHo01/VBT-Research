@@ -26,7 +26,8 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
-#include <nlohmann/json.hpp>
+// nlohmann/json 头文件（生产构建用真实库，存放在 vbtcore-cpp/include/nlohmann/）
+#include "../include/nlohmann/json.hpp"
 
 namespace vbt {
 
