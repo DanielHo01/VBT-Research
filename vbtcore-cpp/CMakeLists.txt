@@ -25,6 +25,33 @@ endif()
 # ── 依赖 ──────────────────────────────────────────────────────────
 find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
 
+# Ubuntu 22.04 apt OpenCV 4.5.4 不导出 OpenCV::core/imgproc 现代目标
+# → 找不到时手动建 fallback
+if(NOT TARGET OpenCV::core)
+    add_library(OpenCV::core INTERFACE IMPORTED)
+    set_target_properties(OpenCV::core PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+    if(OpenCV_LIBS)
+        set_target_properties(OpenCV::core PROPERTIES
+            INTERFACE_LINK_LIBRARIES "${OpenCV_LIBS}")
+    endif()
+endif()
+if(NOT TARGET OpenCV::imgproc)
+    add_library(OpenCV::imgproc INTERFACE IMPORTED)
+    set_target_properties(OpenCV::imgproc PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+endif()
+if(NOT TARGET OpenCV::imgcodecs)
+    add_library(OpenCV::imgcodecs INTERFACE IMPORTED)
+    set_target_properties(OpenCV::imgcodecs PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+endif()
+if(NOT TARGET OpenCV::videoio)
+    add_library(OpenCV::videoio INTERFACE IMPORTED)
+    set_target_properties(OpenCV::videoio PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+endif()
+
 # ONNX Runtime C++ API（必须预编译 NDK 版本）
 find_path(ONNXRUNTIME_INCLUDE_DIR
     NAMES onnxruntime_cxx_api.h
