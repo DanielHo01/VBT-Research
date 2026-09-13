@@ -23,7 +23,7 @@ if(NOT DEFINED VBT_DEPLOY_DIR)
 endif()
 
 # ── 依赖 ──────────────────────────────────────────────────────────
-find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio)
+find_package(OpenCV 4.5 REQUIRED COMPONENTS core imgproc imgcodecs videoio video)
 
 # Ubuntu 22.04 apt OpenCV 4.5.4 不导出 OpenCV::core/imgproc 现代目标
 # → 找不到时手动建 fallback
@@ -49,6 +49,11 @@ endif()
 if(NOT TARGET OpenCV::videoio)
     add_library(OpenCV::videoio INTERFACE IMPORTED)
     set_target_properties(OpenCV::videoio PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
+endif()
+if(NOT TARGET OpenCV::video)
+    add_library(OpenCV::video INTERFACE IMPORTED)
+    set_target_properties(OpenCV::video PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${OpenCV_INCLUDE_DIRS}")
 endif()
 if(NOT TARGET OpenCV::dnn)
@@ -105,7 +110,7 @@ target_include_directories(vbtcore
         ${JSON_INCLUDE_DIR}
 )
 target_link_libraries(vbtcore
-    PUBLIC OpenCV::core OpenCV::imgproc OpenCV::dnn
+    PUBLIC OpenCV::core OpenCV::imgproc OpenCV::dnn OpenCV::video
 )
 if(VBT_HAS_ONNXRUNTIME)
     target_include_directories(vbtcore PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
