@@ -1,0 +1,28 @@
+{
+  "video": "105kg_0.60_0.54_0.55_0.54_0.51_0.37.mp4",
+  "status": "OK",
+  "fps": 30.0,
+  "mpp": 0.00263,
+  "reps": [
+    {
+      "start_idx": 1063,
+      "end_idx": 1084,
+      "start_time": 36.1,
+      "end_time": 36.8,
+      "duration_s": 0.7,
+      "rom_m": 0.2279,
+      "mcv_mps": 0.326,
+      "pcv_mps": 1.499
+    }
+  ],
+  "diagnostics": {
+    "n_frames": 1209,
+    "n_yolo": 79,
+    "elapsed_s": 15.8,
+    "coverage": 1.0,
+    "ms_per_frame": 10.0,
+    "yolo_ratio": 0.065,
+    "plate_diameter_m": 0.45,
+    "exercise_type": "squat_bench"
+  }
+}
