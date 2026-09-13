@@ -65,11 +65,11 @@ endif()
 # ONNX Runtime 安装在 ${ONNXRUNTIME_ROOT}/onnxruntime/{include,lib}
 find_path(ONNXRUNTIME_INCLUDE_DIR
     NAMES onnxruntime_cxx_api.h
-    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/include ${ANDROID_NDK}/../onnxruntime/include
+    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/include ${ANDROID_NDK}/../onnxruntime/include /usr/local/onnxruntime/include
     DOC "ONNX Runtime C++ API header")
 find_library(ONNXRUNTIME_LIB
     NAMES onnxruntime
-    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/lib ${ANDROID_NDK}/../onnxruntime/lib
+    PATHS ${ONNXRUNTIME_ROOT}/onnxruntime/lib ${ANDROID_NDK}/../onnxruntime/lib /usr/local/onnxruntime/lib
     DOC "ONNX Runtime shared library")
 
 if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIB)
