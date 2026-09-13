@@ -17,7 +17,6 @@
 #include "vbt/kalman.hpp"
 
 #include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
 
 namespace vbt {
 
