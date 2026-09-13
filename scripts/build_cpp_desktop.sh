@@ -26,18 +26,18 @@ echo "================================================================"
 
 # ── 0. 系统依赖检查 ───────────────────────────────────────────────
 echo ">>> [0/6] 检查系统依赖..."
-if ! command -v cmake &> /dev/null; then
+if ! command -v cmake &>/dev/null; then
     echo "    ✗ cmake 缺失，正在安装..."
     sudo apt update && sudo apt install -y cmake ninja-build
 fi
-if ! command -v g++ &> /dev/null && ! command -v clang++ &> /dev/null; then
+if ! command -v g++ &>/dev/null && ! command -v clang++ &>/dev/null; then
     echo "    ✗ C++ 编译器缺失，正在安装..."
     sudo apt install -y g++ clang
 fi
 
 CMAKE_VER=$(cmake --version | head -1 | grep -oE '[0-9]+\.[0-9]+')
 echo "    ✓ cmake: ${CMAKE_VER}"
-if command -v clang++ &> /dev/null; then
+if command -v clang++ &>/dev/null; then
     CXX=clang++
     echo "    ✓ clang++: $(clang++ --version | head -1)"
 else

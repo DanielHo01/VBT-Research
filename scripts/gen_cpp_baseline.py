@@ -16,6 +16,7 @@ JSON 字段（与 vbtcore-cpp/src/analyze.cpp::analyze_video_json() 一致）：
     # 或指定视频子集：
     python scripts/gen_cpp_baseline.py --only 30kg,50kg
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,11 +34,13 @@ MODEL = REPO / "models" / "best.onnx"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench-dir", default=str(DEFAULT_BENCH))
-    ap.add_argument("--only", default=None,
-                    help="只跑文件名包含任一子串的视频（逗号分隔）")
+    ap.add_argument(
+        "--only", default=None, help="只跑文件名包含任一子串的视频（逗号分隔）"
+    )
     ap.add_argument("--model", default=str(MODEL))
-    ap.add_argument("--limit", type=int, default=None,
-                    help="最多跑 N 个视频（用于快速验证）")
+    ap.add_argument(
+        "--limit", type=int, default=None, help="最多跑 N 个视频（用于快速验证）"
+    )
     args = ap.parse_args()
 
     bench = Path(args.bench_dir).resolve()
@@ -71,7 +74,7 @@ def main():
         dataset = [d for d in dataset if any(s in d["video_id"] for s in subs)]
         print(f"--only {subs} → {len(dataset)} 个视频")
     if args.limit:
-        dataset = dataset[:args.limit]
+        dataset = dataset[: args.limit]
         print(f"--limit {args.limit} → {len(dataset)} 个视频")
     print(f"共 {len(dataset)} 个视频 | 模型: {Path(model_path).name}")
 
@@ -83,14 +86,15 @@ def main():
         vid = item["video_id"]
         vp = bench / "raw_videos" / vid
         if not vp.exists():
-            print(f"[{k+1:>2}/{len(dataset)}] ⚠ 视频不存在，跳过: {vid}")
+            print(f"[{k + 1:>2}/{len(dataset)}] ⚠ 视频不存在，跳过: {vid}")
             continue
         t_video = time.time()
         try:
-            r = analyze_video(str(vp), model_path_str, detector=det,
-                              exercise_type="squat_bench")
+            r = analyze_video(
+                str(vp), model_path_str, detector=det, exercise_type="squat_bench"
+            )
         except Exception as e:
-            print(f"[{k+1:>2}/{len(dataset)}] ✗ 异常: {vid} - {e}")
+            print(f"[{k + 1:>2}/{len(dataset)}] ✗ 异常: {vid} - {e}")
             continue
 
         # 序列化为 C++ 端 golden_test 期望的 JSON 格式
@@ -124,15 +128,19 @@ def main():
             },
         }
         out_path = BASELINE_DIR / f"{vid}.json"
-        out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+        out_path.write_text(
+            json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         dt = time.time() - t_video
-        print(f"[{k+1:>2}/{len(dataset)}] {vid:<44} status={r.status:<18} "
-              f"reps={len(r.reps):>2}/{len(item.get('gt_reps_mcv', [])):<2} "
-              f"elapsed={dt:.1f}s → {out_path.name}")
+        print(
+            f"[{k + 1:>2}/{len(dataset)}] {vid:<44} status={r.status:<18} "
+            f"reps={len(r.reps):>2}/{len(item.get('gt_reps_mcv', [])):<2} "
+            f"elapsed={dt:.1f}s → {out_path.name}"
+        )
 
     total = time.time() - t0
     print(f"\n✓ 全部 {len(dataset)} 个视频已写入 {BASELINE_DIR}")
-    print(f"  总耗时: {total:.1f}s ({total/60:.1f} min)")
+    print(f"  总耗时: {total:.1f}s ({total / 60:.1f} min)")
     print("\n下一步：把 validation/reports/cpp_baseline/*.json 拷贝到 Linux 桌面端，")
     print("       与 C++ golden_test 输出的 JSON 做 max_vel_err 偏差比对。")
 
