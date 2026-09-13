@@ -77,6 +77,9 @@ std::array<double, 2> BarbellKalmanTracker::predict() {
 }
 
 std::array<double, 2> BarbellKalmanTracker::update(double observed_y) {
+    if (std::isnan(observed_y) || !std::isfinite(observed_y)) {
+        return {x_[0], x_[1]};
+    }
     // 卡尔曼增益 K = P @ H^T / (H @ P @ H^T + R)
     double PHt[3] = {0.0, 0.0, 0.0};
     for (int i = 0; i < 3; ++i) {
