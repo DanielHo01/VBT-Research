@@ -13,7 +13,7 @@
 #include <map>
 #include <vector>
 
-#include "../cmake/json_stub/nlohmann/json.hpp"  // LSP stub; 实际编译时使用 CMake 链接的真实 nlohmann/json
+#include <nlohmann/json.hpp>
 
 #include "vbt/analyze.hpp"
 
