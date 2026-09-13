@@ -65,7 +65,7 @@ echo "    ✓ nlohmann/json: header-only（apt nlohmann-json3-dev）"
 
 # ── 2. ONNX Runtime CPU 包（apt 或下载预编译）─────────────────
 echo ">>> [2/6] 安装 ONNX Runtime..."
-if [ ! -d /usr/local/include/onnxruntime ]; then
+if [ ! -f /usr/local/onnxruntime/lib/libonnxruntime.so ]; then
     echo "    ✗ ONNX Runtime 缺失，正在下载预编译..."
     ONNX_VER="1.17.1"
     ONNX_TARBALL="onnxruntime-linux-x64-${ONNX_VER}.tgz"
@@ -74,6 +74,8 @@ if [ ! -d /usr/local/include/onnxruntime ]; then
     sudo mv "/usr/local/onnxruntime-linux-x64-${ONNX_VER}" /usr/local/onnxruntime
     sudo ldconfig
     rm -f "${ONNX_TARBALL}"
+else
+    echo "    ✓ ONNX Runtime 已存在: /usr/local/onnxruntime"
 fi
 echo "    ✓ ONNX Runtime: /usr/local/onnxruntime"
 
@@ -81,7 +83,7 @@ echo "    ✓ ONNX Runtime: /usr/local/onnxruntime"
 echo ">>> [3/6] 生成 Python baseline JSON..."
 mkdir -p "${VBT_BASELINE_DIR}"
 cd "${REPO_ROOT}"
-python scripts/run_benchmark_v0.py --tag cpp_golden --output-dir "${VBT_BASELINE_DIR}" || {
+python3 scripts/run_benchmark_v0.py --tag cpp_golden --output-dir "${VBT_BASELINE_DIR}" || {
     echo "    ⚠ Python benchmark 失败，将以 NO_BASELINE 模式跑 golden_test"
 }
 
