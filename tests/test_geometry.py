@@ -4,6 +4,7 @@ tests/test_geometry.py — 坐标映射回归测试
 竖屏旋转逆映射镜像错误。vbtcore.geometry.canvas_to_orig 必须与
 cv2.ROTATE_90_CLOCKWISE 的标准正映射严格互逆。
 """
+
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from vbtcore.geometry import preprocess, canvas_to_orig
+from vbtcore.geometry import canvas_to_orig, preprocess
 
 
 def test_rotate_roundtrip_pixel_exact():

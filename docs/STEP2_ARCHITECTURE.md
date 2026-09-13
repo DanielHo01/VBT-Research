@@ -210,7 +210,7 @@ class BarbellKalmanTracker:
 
 ### P1（建议完成）
 
-4. **调整 KalmanFilter 参数**
+1. **调整 KalmanFilter 参数**
    - `Q=0.01, R=4.0` 是初始猜测，建议在 3-5 条代表性视频上调参
    - 原则：R 越大 = 越信任检测器 = 响应越快；R 越小 = 越信任预测 = 越平滑
 
@@ -221,7 +221,7 @@ class BarbellKalmanTracker:
 
 ### P2（可选）
 
-6. **多负荷 lookup table**
+1. **多负荷 lookup table**
    - 当前假设 `plate_diameter_m = 0.45`
    - 实际：不同负荷直径不同（20kg≈0.45m, 25kg≈0.45m, 等）
    - `geometry.py` 的 `PLATE_DIAMETERS_M` 已存在，需完善

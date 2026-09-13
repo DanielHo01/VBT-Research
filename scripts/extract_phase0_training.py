@@ -40,10 +40,10 @@ TOTAL_TARGET = 420  # 目标总帧数
 
 # ─── 阈值常量 ────────────────────────────────────────────────────────────────
 BOTTOM_Y_THRESHOLD_RATIO = 0.65  # 主框 cy > h * ratio → 底位
-BRIGHTNESS_DARK_THRESHOLD = 80   # 帧平均亮度 < threshold → 暗光
+BRIGHTNESS_DARK_THRESHOLD = 80  # 帧平均亮度 < threshold → 暗光
 BRIGHTNESS_NORM_THRESHOLD = 160  # 帧平均亮度 > threshold → 正常光
 OCCLUSION_CONF_THRESHOLD = 0.15  # conf < threshold → 可能是遮挡
-MULTI_PLATE_COUNT = 2            # ≥ 2 个候选框 → 多片
+MULTI_PLATE_COUNT = 2  # ≥ 2 个候选框 → 多片
 
 logging.basicConfig(
     level=logging.INFO,
@@ -129,9 +129,13 @@ def sample_frames_from_raw_json(
         return []
 
     samples = []
-    per_cat = {k: 0 for k in ["bottom", "low_light", "occlusion", "multi_plate", "normal"]}
+    per_cat = dict.fromkeys(
+        ["bottom", "low_light", "occlusion", "multi_plate", "normal"], 0
+    )
 
-    for frame_entry in tqdm(frames_data, desc=Path(raw_json_path).stem[:30], leave=False):
+    for frame_entry in tqdm(
+        frames_data, desc=Path(raw_json_path).stem[:30], leave=False
+    ):
         frame_idx = frame_entry["frame_idx"]
         pts_s = frame_entry["pts_s"]
         candidates = frame_entry.get("candidates", [])
@@ -162,15 +166,17 @@ def sample_frames_from_raw_json(
             continue
 
         per_cat[category] += 1
-        samples.append({
-            "frame_idx": frame_idx,
-            "pts_s": round(pts_s, 3),
-            "category": category,
-            "category_score": round(score, 3),
-            "candidates": candidates,
-            "primary_idx": primary_idx,
-            "video_id": data.get("video_id", ""),
-        })
+        samples.append(
+            {
+                "frame_idx": frame_idx,
+                "pts_s": round(pts_s, 3),
+                "category": category,
+                "category_score": round(score, 3),
+                "candidates": candidates,
+                "primary_idx": primary_idx,
+                "video_id": data.get("video_id", ""),
+            }
+        )
 
     cap.release()
     return samples
@@ -194,11 +200,11 @@ def extract_frames(
 
     records = []
     colors = {
-        "bottom": (0, 200, 255),       # 橙色
-        "low_light": (128, 128, 255), # 浅红
-        "occlusion": (0, 100, 255),    # 蓝
-        "multi_plate": (0, 255, 0),    # 绿
-        "normal": (200, 200, 200),     # 灰
+        "bottom": (0, 200, 255),  # 橙色
+        "low_light": (128, 128, 255),  # 浅红
+        "occlusion": (0, 100, 255),  # 蓝
+        "multi_plate": (0, 255, 0),  # 绿
+        "normal": (200, 200, 200),  # 灰
     }
 
     for sample in tqdm(sample_list, desc="extract", leave=False):
@@ -225,35 +231,49 @@ def extract_frames(
             y1 = max(0, int(cy - bh / 2))
             x2 = min(w, int(cx + bw / 2))
             y2 = min(h, int(cy + bh / 2))
-            is_primary = (i == primary_idx)
+            is_primary = i == primary_idx
             thick = 3 if is_primary else 1
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, thick)
             label = f"{conf:.2f}"
-            cv2.putText(frame, label, (x1, max(0, y1 - 5)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(
+                frame,
+                label,
+                (x1, max(0, y1 - 5)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                1,
+            )
 
         # 类别标签
-        cv2.putText(frame, category.upper(), (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        cv2.putText(
+            frame, category.upper(), (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2
+        )
 
         # 保存
         video_id = sample.get("video_id", "unknown")
-        safe_id = "".join(c for c in video_id.replace(".mp4", "") if c.isalnum() or c in "-_")
+        safe_id = "".join(
+            c for c in video_id.replace(".mp4", "") if c.isalnum() or c in "-_"
+        )
         fname = f"{safe_id}_f{frame_idx:05d}_{category}.jpg"
         out_path = output_dir / fname
         cv2.imwrite(str(out_path), frame)
 
-        records.append({
-            "file": str(out_path),
-            "frame_idx": frame_idx,
-            "pts_s": sample["pts_s"],
-            "category": category,
-            "category_score": sample["category_score"],
-            "video_id": video_id,
-            "n_candidates": len(candidates),
-            "primary_idx": primary_idx,
-            "primary_conf": candidates[primary_idx]["conf"] if (primary_idx >= 0 and candidates) else 0.0,
-        })
+        records.append(
+            {
+                "file": str(out_path),
+                "frame_idx": frame_idx,
+                "pts_s": sample["pts_s"],
+                "category": category,
+                "category_score": sample["category_score"],
+                "video_id": video_id,
+                "n_candidates": len(candidates),
+                "primary_idx": primary_idx,
+                "primary_conf": candidates[primary_idx]["conf"]
+                if (primary_idx >= 0 and candidates)
+                else 0.0,
+            }
+        )
 
     cap.release()
     return records
