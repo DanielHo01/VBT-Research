@@ -104,7 +104,7 @@
 
 ### App MVP 功能栈（Stage 3 后启动，与算法解耦）
 `录制/导入 + 标定向导 → set 总结（rep 列表 + velocity loss 曲线）→ 历史趋势 → LVP/e1RM → CSV 导出 → 视频回放 + bar path 叠加 →（商业化）教练端`
-差异化主打：**中文市场 + 计次鲁棒性 + 自动 unrack 剔除 + 精度公开报告**（竞品缝隙，见 DEEP_DIVE_REPORT.md 第四节）。
+差异化主打：**中文市场 + 计次鲁棒性 + 自动 unrack 剔除 + 精度公开报告**（竞品缝隙，见 archive/DEEP_DIVE_REPORT.md 第四节）。
 
 ---
 

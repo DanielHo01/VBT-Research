@@ -12,7 +12,8 @@ Phase 1 cleanup (2026-09-12)：
   · BiomechanicalRepSegmenter → 速度 FSM 分段（深蹲/卧推 + 硬拉）
   · 统一 PTS 时间戳，消灭 px/frame 量纲混乱
 
-Benchmark 结果：14/34 (41%) 计数通过（vs 旧版 3/34 (9%)）
+成绩：不在此处抄写数字。全仓库唯一事实表见
+      validation/reports/SCOREBOARD.md
 """
 
 from __future__ import annotations
