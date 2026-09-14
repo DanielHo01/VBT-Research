@@ -2,27 +2,58 @@
   "video": "105kg_0.60_0.54_0.55_0.54_0.51_0.37.mp4",
   "status": "OK",
   "fps": 30.0,
-  "mpp": 0.00263,
+  "mpp": 0.002633,
   "reps": [
     {
-      "start_idx": 1063,
-      "end_idx": 1084,
-      "start_time": 36.1,
-      "end_time": 36.8,
-      "duration_s": 0.7,
-      "rom_m": 0.2279,
-      "mcv_mps": 0.326,
-      "pcv_mps": 1.499
+      "start_idx": 149,
+      "end_idx": 188,
+      "start_time": 5.633,
+      "end_time": 6.933,
+      "duration_s": 1.3,
+      "rom_m": 0.4636,
+      "mcv_mps": 0.357,
+      "pcv_mps": 1.085
+    },
+    {
+      "start_idx": 454,
+      "end_idx": 479,
+      "start_time": 15.8,
+      "end_time": 16.633,
+      "duration_s": 0.833,
+      "rom_m": 0.4201,
+      "mcv_mps": 0.504,
+      "pcv_mps": 1.207
+    },
+    {
+      "start_idx": 763,
+      "end_idx": 793,
+      "start_time": 26.1,
+      "end_time": 27.1,
+      "duration_s": 1.0,
+      "rom_m": 0.3984,
+      "mcv_mps": 0.398,
+      "pcv_mps": 0.982
+    },
+    {
+      "start_idx": 1060,
+      "end_idx": 1089,
+      "start_time": 36.0,
+      "end_time": 36.967,
+      "duration_s": 0.967,
+      "rom_m": 0.3887,
+      "mcv_mps": 0.402,
+      "pcv_mps": 0.826
     }
   ],
   "diagnostics": {
     "n_frames": 1209,
-    "n_yolo": 79,
-    "elapsed_s": 15.8,
+    "n_yolo": 1189,
+    "elapsed_s": 87.3,
     "coverage": 1.0,
-    "ms_per_frame": 10.0,
-    "yolo_ratio": 0.065,
+    "ms_per_frame": 69.2,
+    "yolo_ratio": 0.983,
     "plate_diameter_m": 0.45,
-    "exercise_type": "squat_bench"
+    "exercise_type": "squat_bench",
+    "stride": 1
   }
 }

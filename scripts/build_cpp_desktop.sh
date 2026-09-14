@@ -83,8 +83,15 @@ echo "    ✓ ONNX Runtime: /usr/local/onnxruntime"
 echo ">>> [3/6] 生成 Python baseline JSON..."
 mkdir -p "${VBT_BASELINE_DIR}"
 cd "${REPO_ROOT}"
-python3 scripts/run_benchmark_v0.py --tag cpp_golden --output-dir "${VBT_BASELINE_DIR}" || {
-    echo "    ⚠ Python benchmark 失败，将以 NO_BASELINE 模式跑 golden_test"
+# 必须用 gen_cpp_baseline.py：它产出 golden_test 期望的 per-video JSON
+# （<video_id>.mp4.json，含 reps/mpp/diagnostics）。
+# run_benchmark_v0.py 产出的是聚合 Markdown 报告，格式不匹配（历史错误）。
+# stride=1 = 第一阶段「Make it Right」口径，不得改为稀疏检测。
+python3 scripts/gen_cpp_baseline.py \
+    --workers "$(nproc)" \
+    --copy-to-tmp \
+    --out-dir "${VBT_BASELINE_DIR}" || {
+    echo "    ⚠ Python baseline 生成失败，将以 NO_BASELINE 模式跑 golden_test"
 }
 
 # ── 4. CMake 配置 ─────────────────────────────────────────────
@@ -107,16 +114,44 @@ ninja -j"$(nproc)" vbtcore golden_test
 # ── 6. 跑 golden_test ─────────────────────────────────────────
 echo ">>> [6/6] 跑 golden_test（34 视频 vs Python baseline）..."
 echo "============================================================"
+# ASan 泄漏抑制：libonnxruntime 自身有 ~318 B 的静态分配未释放，
+# 属第三方库行为，不应判为我方内存错误。
+if [ ! -f "${REPO_ROOT}/scripts/lsan.supp" ]; then
+    printf 'leak:libonnxruntime\n' > "${REPO_ROOT}/scripts/lsan.supp"
+fi
+
+set +e
+ASAN_OPTIONS=detect_leaks=1 \
+LSAN_OPTIONS="suppressions=${REPO_ROOT}/scripts/lsan.supp" \
 ./tests/golden_test \
     "${REPO_ROOT}/validation/dataset_benchmark/raw_videos" \
     "${VBT_BASELINE_DIR}" \
     2>&1 | tee golden_test.log
+GOLDEN_RC=${PIPESTATUS[0]}
+set -e
 
 echo "============================================================"
 echo " 铁律闸门验收"
 echo "============================================================"
-if grep -q "通过: [2-3][0-9]" golden_test.log; then
-    echo "  ✅ Step 1-3 通过：≥ 20/34 视频 MCV 偏差 ≤ 0.001 m/s"
+
+# 直接解析「通过: N」为整数，避免用正则碰运气（旧写法 "通过: [2-3][0-9]"
+# 既会漏判也会误判，且完全忽略 golden_test 的退出码）。
+N_PASS=$(grep -oP '通过:\s*\K[0-9]+' golden_test.log | head -1)
+N_PASS=${N_PASS:-0}
+N_TOTAL=$(grep -oP '总计:\s*\K[0-9]+' golden_test.log | head -1)
+N_TOTAL=${N_TOTAL:-34}
+
+# ASan 真实内存错误（泄漏已 suppress，这里抓的是越界/UAF/SEGV）
+if grep -qE "ERROR: AddressSanitizer|SEGV|heap-buffer-overflow|use-after-free" golden_test.log; then
+    echo "  ✗ 检测到 ASan 内存错误 → 严禁启动 NDK 编译"
+    grep -nE "ERROR: AddressSanitizer|SEGV|heap-buffer-overflow|use-after-free" golden_test.log | head
+    exit 1
+fi
+echo "  ✓ ASan：无内存越界/UAF/SEGV"
+
+echo "  通过: ${N_PASS}/${N_TOTAL}（要求 ≥ 20）"
+if [ "${N_PASS}" -ge 20 ] && [ "${GOLDEN_RC}" -eq 0 ]; then
+    echo "  ✅ Step 1-3 通过：≥ 20/34 视频 MCV 偏差 ≤ 0.005 m/s"
     echo "  → 可进入 Step 4：NDK 交叉编译"
     echo ""
     echo "  下一步："
@@ -126,6 +161,8 @@ if grep -q "通过: [2-3][0-9]" golden_test.log; then
 else
     echo "  ✗ Step 1-3 未通过：< 20/34 视频或偏差超阈值"
     echo "  → 严禁启动 NDK 编译（铁律闸门）"
-    echo "  → 请检查 golden_test.log 中的 max_vel_err，定位数值漂移"
+    echo "  → 请检查 golden_test.log 中的 mcv_err，定位数值漂移"
+    echo "  → 提示：确保 Python 端 opencv 版本与 C++ 端一致"
+    echo "     （goodFeaturesToTrack / calcOpticalFlowPyrLK 跨大版本实现有差异）"
     exit 1
 fi

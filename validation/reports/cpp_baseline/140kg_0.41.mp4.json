@@ -2,37 +2,28 @@
   "video": "140kg_0.41.mp4",
   "status": "OK",
   "fps": 30.0,
-  "mpp": 0.002553,
+  "mpp": 0.002556,
   "reps": [
     {
-      "start_idx": 29,
-      "end_idx": 44,
-      "start_time": 1.633,
-      "end_time": 2.133,
-      "duration_s": 0.5,
-      "rom_m": 0.1435,
-      "mcv_mps": 0.287,
-      "pcv_mps": 1.037
-    },
-    {
-      "start_idx": 48,
-      "end_idx": 73,
-      "start_time": 2.267,
-      "end_time": 3.1,
-      "duration_s": 0.833,
-      "rom_m": 0.3768,
-      "mcv_mps": 0.452,
-      "pcv_mps": 1.423
+      "start_idx": 24,
+      "end_idx": 69,
+      "start_time": 1.467,
+      "end_time": 2.967,
+      "duration_s": 1.5,
+      "rom_m": 0.5936,
+      "mcv_mps": 0.396,
+      "pcv_mps": 1.197
     }
   ],
   "diagnostics": {
     "n_frames": 99,
-    "n_yolo": 5,
-    "elapsed_s": 2.3,
+    "n_yolo": 79,
+    "elapsed_s": 6.5,
     "coverage": 1.0,
-    "ms_per_frame": 19.3,
-    "yolo_ratio": 0.051,
+    "ms_per_frame": 61.8,
+    "yolo_ratio": 0.798,
     "plate_diameter_m": 0.45,
-    "exercise_type": "squat_bench"
+    "exercise_type": "squat_bench",
+    "stride": 1
   }
 }

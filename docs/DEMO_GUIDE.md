@@ -44,7 +44,7 @@ python tests/run_all_tests.py
 
 ```bash
 python scripts/run_benchmark_v0.py --tag baseline_check
-# 期望：与 BENCHMARK_v5.md 数字一致（≥ 24/34 OK）
+# 期望：与 validation/reports/SCOREBOARD.md 的当前基线一致
 ```
 
 ## 2. 编译 C++ 中间层（30 分钟）
@@ -117,7 +117,7 @@ adb shell am start -n com.easyvbt.demo.debug/com.easyvbt.demo.MainActivity
 
 - [ ] `tests/run_all_tests.py` 26/26 全过
 - [ ] 34 视频 benchmark ≥ 24/34 OK
-- [ ] `BENCHMARK_v5.md` 与上次数字一致
+- [ ] 成绩与 `validation/reports/SCOREBOARD.md` 当前基线一致
 
 ### 5.2 C++ 中间层 ✅
 
