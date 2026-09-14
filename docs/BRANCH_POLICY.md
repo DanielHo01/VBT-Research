@@ -178,9 +178,9 @@ git push -u origin HEAD
 
 `feat/phase0-pure-detection`、`feat/vbtcore-v5-refactor` 已于 v0.1.0-baseline 之前 squash merge 到 main。原分支已删除。相关文档归档于：
 
-- `docs/STEP2_ARCHITECTURE.md`
-- `docs/DATA_DD_20260912.md`
-- `docs/SESSION_HANDOFF_20260911.md`
+- `docs/archive/STEP2_ARCHITECTURE.md`
+- `docs/archive/DATA_DD_20260912.md`
+- `docs/archive/SESSION_HANDOFF_20260911.md`
 
 ---
 

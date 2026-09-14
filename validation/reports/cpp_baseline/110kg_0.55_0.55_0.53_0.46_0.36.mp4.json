@@ -2,57 +2,68 @@
   "video": "110kg_0.55_0.55_0.53_0.46_0.36.mp4",
   "status": "OK",
   "fps": 30.0,
-  "mpp": 0.003058,
+  "mpp": 0.003082,
   "reps": [
     {
-      "start_idx": 614,
-      "end_idx": 647,
-      "start_time": 21.133,
-      "end_time": 22.233,
+      "start_idx": 320,
+      "end_idx": 355,
+      "start_time": 11.333,
+      "end_time": 12.5,
+      "duration_s": 1.167,
+      "rom_m": 0.6155,
+      "mcv_mps": 0.528,
+      "pcv_mps": 1.44
+    },
+    {
+      "start_idx": 615,
+      "end_idx": 648,
+      "start_time": 21.167,
+      "end_time": 22.267,
       "duration_s": 1.1,
-      "rom_m": 0.5233,
-      "mcv_mps": 0.476,
+      "rom_m": 0.5915,
+      "mcv_mps": 0.538,
+      "pcv_mps": 1.432
+    },
+    {
+      "start_idx": 880,
+      "end_idx": 909,
+      "start_time": 30.0,
+      "end_time": 30.967,
+      "duration_s": 0.967,
+      "rom_m": 0.4941,
+      "mcv_mps": 0.511,
       "pcv_mps": 1.349
     },
     {
-      "start_idx": 884,
-      "end_idx": 909,
-      "start_time": 30.133,
-      "end_time": 30.967,
-      "duration_s": 0.833,
-      "rom_m": 0.493,
-      "mcv_mps": 0.592,
-      "pcv_mps": 1.379
-    },
-    {
-      "start_idx": 1149,
+      "start_idx": 1150,
       "end_idx": 1184,
-      "start_time": 38.967,
+      "start_time": 39.0,
       "end_time": 40.133,
-      "duration_s": 1.167,
-      "rom_m": 0.4714,
-      "mcv_mps": 0.404,
-      "pcv_mps": 1.416
+      "duration_s": 1.133,
+      "rom_m": 0.4686,
+      "mcv_mps": 0.413,
+      "pcv_mps": 1.404
     },
     {
-      "start_idx": 1410,
+      "start_idx": 1414,
       "end_idx": 1453,
-      "start_time": 47.667,
+      "start_time": 47.8,
       "end_time": 49.1,
-      "duration_s": 1.433,
-      "rom_m": 0.451,
-      "mcv_mps": 0.315,
-      "pcv_mps": 1.037
+      "duration_s": 1.3,
+      "rom_m": 0.449,
+      "mcv_mps": 0.345,
+      "pcv_mps": 1.049
     }
   ],
   "diagnostics": {
     "n_frames": 1620,
-    "n_yolo": 106,
-    "elapsed_s": 21.5,
+    "n_yolo": 1600,
+    "elapsed_s": 111.7,
     "coverage": 1.0,
-    "ms_per_frame": 10.1,
-    "yolo_ratio": 0.065,
+    "ms_per_frame": 65.8,
+    "yolo_ratio": 0.988,
     "plate_diameter_m": 0.45,
-    "exercise_type": "squat_bench"
+    "exercise_type": "squat_bench",
+    "stride": 1
   }
 }

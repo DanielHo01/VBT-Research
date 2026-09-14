@@ -1,0 +1,7 @@
+# 留出集视频目录
+#
+# 视频文件放这里，命名规范：{总负荷}kg_{rep1}_{rep2}_....mp4
+# 例：100kg_0.55_0.50.mp4
+#
+# 加入新视频后运行：
+#   python3 scripts/holdout_intake.py --check

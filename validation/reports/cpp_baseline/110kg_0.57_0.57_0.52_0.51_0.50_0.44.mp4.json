@@ -2,67 +2,78 @@
   "video": "110kg_0.57_0.57_0.52_0.51_0.50_0.44.mp4",
   "status": "OK",
   "fps": 30.0,
-  "mpp": 0.002996,
+  "mpp": 0.002912,
   "reps": [
     {
-      "start_idx": 493,
-      "end_idx": 510,
-      "start_time": 17.1,
-      "end_time": 17.667,
-      "duration_s": 0.567,
-      "rom_m": 0.2261,
-      "mcv_mps": 0.399,
-      "pcv_mps": 1.897
-    },
-    {
-      "start_idx": 515,
+      "start_idx": 492,
       "end_idx": 524,
-      "start_time": 17.833,
+      "start_time": 17.067,
       "end_time": 18.133,
-      "duration_s": 0.3,
-      "rom_m": 0.4015,
-      "mcv_mps": 1.338,
-      "pcv_mps": 5.385
+      "duration_s": 1.067,
+      "rom_m": 0.5844,
+      "mcv_mps": 0.548,
+      "pcv_mps": 1.43
     },
     {
-      "start_idx": 1393,
+      "start_idx": 842,
+      "end_idx": 869,
+      "start_time": 28.733,
+      "end_time": 29.633,
+      "duration_s": 0.9,
+      "rom_m": 0.4772,
+      "mcv_mps": 0.53,
+      "pcv_mps": 1.615
+    },
+    {
+      "start_idx": 1118,
+      "end_idx": 1151,
+      "start_time": 37.933,
+      "end_time": 39.033,
+      "duration_s": 1.1,
+      "rom_m": 0.5234,
+      "mcv_mps": 0.476,
+      "pcv_mps": 1.53
+    },
+    {
+      "start_idx": 1388,
       "end_idx": 1421,
-      "start_time": 47.1,
+      "start_time": 46.933,
       "end_time": 48.033,
-      "duration_s": 0.933,
-      "rom_m": 0.5102,
-      "mcv_mps": 0.547,
-      "pcv_mps": 1.239
+      "duration_s": 1.1,
+      "rom_m": 0.4946,
+      "mcv_mps": 0.45,
+      "pcv_mps": 1.358
     },
     {
-      "start_idx": 1649,
-      "end_idx": 1665,
-      "start_time": 55.633,
-      "end_time": 56.167,
-      "duration_s": 0.533,
-      "rom_m": 0.1474,
-      "mcv_mps": 0.276,
-      "pcv_mps": 0.665
+      "start_idx": 1648,
+      "end_idx": 1680,
+      "start_time": 55.6,
+      "end_time": 56.667,
+      "duration_s": 1.067,
+      "rom_m": 0.4859,
+      "mcv_mps": 0.456,
+      "pcv_mps": 1.347
     },
     {
-      "start_idx": 1904,
-      "end_idx": 1935,
-      "start_time": 64.133,
-      "end_time": 65.167,
-      "duration_s": 1.033,
-      "rom_m": 0.3466,
-      "mcv_mps": 0.335,
-      "pcv_mps": 1.81
+      "start_idx": 1905,
+      "end_idx": 1939,
+      "start_time": 64.167,
+      "end_time": 65.3,
+      "duration_s": 1.133,
+      "rom_m": 0.4594,
+      "mcv_mps": 0.405,
+      "pcv_mps": 1.137
     }
   ],
   "diagnostics": {
     "n_frames": 1993,
-    "n_yolo": 131,
-    "elapsed_s": 26.6,
+    "n_yolo": 1973,
+    "elapsed_s": 136.7,
     "coverage": 1.0,
-    "ms_per_frame": 10.1,
-    "yolo_ratio": 0.066,
+    "ms_per_frame": 65.5,
+    "yolo_ratio": 0.99,
     "plate_diameter_m": 0.45,
-    "exercise_type": "squat_bench"
+    "exercise_type": "squat_bench",
+    "stride": 1
   }
 }
