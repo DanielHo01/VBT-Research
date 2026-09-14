@@ -13,7 +13,7 @@
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
-| **第一阶段 · Make it Right** | ✅ **已达成** | stride=1 全量检测，开发集 rep RMSE **0.0664**、r **0.9423**、计数 **31/34** |
+| **第一阶段 · Make it Right** | 🟡 **Python 端达成，Iron Gate 未过** | stride=1 全量检测，开发集 rep RMSE **0.0487**、r **0.9700**、计数 **32/34**（[SCOREBOARD](validation/reports/SCOREBOARD.md)）。C++ 对齐闸门上次 17/34 < 20，**未亮绿** |
 | **第二阶段 · Make it Fast** | ⏸ 未启动 | 需先通过 Iron Gate（C++ 对齐 ≥20/34），当前 17/34 |
 | **第三阶段 · Make it Robust** | 🔲 未开始 | 陀螺仪水平引导、遮挡自愈、热降频 |
 
@@ -24,6 +24,9 @@
 **重要口径**：以上均为 **dev（开发集）成绩**。留出集 `validation/holdout/`
 尚未采集，按 [`docs/HOLDOUT.md`](docs/HOLDOUT.md) 的双报纪律，
 最终成绩必须以 `dev ｜ held-out` 双报形式给出。
+
+> 📌 **接手开发请先读 [`docs/HANDOFF.md`](docs/HANDOFF.md)** —— 当前卡点、
+> 最近改动、本地要做的三件事、以及不要重蹈的六条覆辙，都在那里。
 
 ---
 
