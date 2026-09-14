@@ -21,9 +21,22 @@ namespace vbt {
 #include <cmath>
 
 namespace {
-/// 计算 sigmoid（ONNX YOLO 输出已 logits，应用 sigmoid 转概率）。
-inline float sigmoid(float x) {
-    return 1.0f / (1.0f + std::exp(-x));
+/// 【已修复 · 禁止复活】置信度双重 sigmoid
+/// ------------------------------------------------------------------
+/// Ultralytics 导出的 YOLOv11 ONNX，输出 [1,5,8400] 的 row[4] **已经是概率**
+/// （实测 models/best.onnx 首帧：min=0.000000 max=0.930283 mean=0.002112）。
+/// 旧实现在此再套一层 sigmoid，把 [0,1] 概率映射到 [0.5, 0.731]，
+/// 导致全部 8400 个 anchor 都 > conf_thresh(0.40)（实测 8400/8400 通过，
+/// 正确解析应只有 20 个），max-area 选框于是锁定到无意义的巨大噪声框，
+/// 标定得到 mpp=0.000565539（正确值 0.002471，虚小 4.37×）。
+///
+/// 这与 Python 端 vbtcore/detector.py 的一号历史 bug 完全同源
+/// （见该文件 docstring「置信度双重 sigmoid」），Python 已修复，
+/// C++ 端此前遗留未同步。
+///
+/// 铁律：row[4] 直接用作概率，禁止再套 sigmoid。
+inline float score_as_prob(float x) {
+    return x;
 }
 
 /// 计算两个框的 IoU。
@@ -46,7 +59,7 @@ inline double iou(double cx1, double cy1, double w1, double h1,
 
 /// 解析单帧 YOLO 输出 (1, N, 5+) →  Detection 列表。
 /// 模型格式：YOLOv11/v8 推理输出 (1, num_anchors, 5+num_classes)，
-/// 每行 = [cx, cy, w, h, conf, class_probs...]（sigmoid 后）。
+/// 每行 = [cx, cy, w, h, conf, class_probs...]（conf 已是概率，禁止再套 sigmoid）。
 std::vector<Detection> parse_yolo_output(
     const float* data, std::size_t num_boxes,
     int box_stride,
@@ -58,16 +71,17 @@ std::vector<Detection> parse_yolo_output(
     dets.reserve(num_boxes);
     for (std::size_t i = 0; i < num_boxes; ++i) {
         const float* row = data + i * box_stride;
-        const float obj_conf = sigmoid(row[4]);
+        const float obj_conf = score_as_prob(row[4]);
         if (obj_conf < conf_thresh) continue;
         const double cx_c = row[0];
         const double cy_c = row[1];
         const double w_c = row[2];
         const double h_c = row[3];
         const auto orig = vbt::canvas_to_orig(pp, cx_c, cy_c, w_c, h_c);
-        if (orig.cx < 0 || orig.cx >= orig_w || orig.cy < 0 || orig.cy >= orig_h) {
-            continue;
-        }
+        // 【对齐 Python】Python 端 PlateDetector.detect 不做出画过滤，
+        // 直接返回所有过阈值检测。C++ 若额外剔除出画框，会改变
+        // analyze.cpp 里 max-area 的选框结果，造成两端标定/跟踪分叉。
+        // 出画拒绝属于「锚定打分」层策略，不应混在解析层。
         Detection d;
         d.cx = orig.cx;
         d.cy = orig.cy;
@@ -107,7 +121,7 @@ std::vector<Detection> parse_yolov11_transposed(
     const float* row_score = data + 4 * num_anchors;
 
     for (int i = 0; i < num_anchors; ++i) {
-        const float score = sigmoid(row_score[i]);
+        const float score = score_as_prob(row_score[i]);
         if (score < conf_thresh) continue;
 
         const double cx_c = row_cx[i];
@@ -116,9 +130,10 @@ std::vector<Detection> parse_yolov11_transposed(
         const double h_c  = row_h[i];
 
         const auto orig = vbt::canvas_to_orig(pp, cx_c, cy_c, w_c, h_c);
-        if (orig.cx < 0 || orig.cx >= orig_w || orig.cy < 0 || orig.cy >= orig_h) {
-            continue;
-        }
+        // 【对齐 Python】Python 端 PlateDetector.detect 不做出画过滤，
+        // 直接返回所有过阈值检测。C++ 若额外剔除出画框，会改变
+        // analyze.cpp 里 max-area 的选框结果，造成两端标定/跟踪分叉。
+        // 出画拒绝属于「锚定打分」层策略，不应混在解析层。
         Detection d;
         d.cx = orig.cx;
         d.cy = orig.cy;
