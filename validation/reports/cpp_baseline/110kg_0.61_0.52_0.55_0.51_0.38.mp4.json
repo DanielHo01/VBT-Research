@@ -15,6 +15,16 @@
       "pcv_mps": 1.612
     },
     {
+      "start_idx": 543,
+      "end_idx": 575,
+      "start_time": 18.967,
+      "end_time": 20.033,
+      "duration_s": 1.067,
+      "rom_m": 0.59,
+      "mcv_mps": 0.553,
+      "pcv_mps": 1.546
+    },
+    {
       "start_idx": 800,
       "end_idx": 828,
       "start_time": 27.533,
@@ -33,14 +43,24 @@
       "rom_m": 0.4949,
       "mcv_mps": 0.495,
       "pcv_mps": 1.475
+    },
+    {
+      "start_idx": 1273,
+      "end_idx": 1311,
+      "start_time": 43.3,
+      "end_time": 44.567,
+      "duration_s": 1.267,
+      "rom_m": 0.4545,
+      "mcv_mps": 0.359,
+      "pcv_mps": 1.228
     }
   ],
   "diagnostics": {
     "n_frames": 1448,
     "n_yolo": 1422,
-    "elapsed_s": 153.9,
+    "elapsed_s": 100.2,
     "coverage": 1.0,
-    "ms_per_frame": 102.1,
+    "ms_per_frame": 66.0,
     "yolo_ratio": 0.982,
     "plate_diameter_m": 0.45,
     "exercise_type": "squat_bench",

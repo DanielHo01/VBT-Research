@@ -49,12 +49,34 @@ class BiomechanicalRepSegmenter:
         min_dur_s: float = 0.20,
         v_thresh_start: float = 0.08,
         v_zero_band: float = 0.02,
+        confirm_frames: int = 3,
     ):
+        """
+        confirm_frames : 状态跃迁的连续确认帧数（默认 3）
+        ─────────────────────────────────────────────────
+        【2026-09-14 修复】旧实现只看 (i, i+1) 两帧判定底部换向与向心结束，
+        蹲底停顿期的单帧速度抖动即可触发「早产的 CONCENTRIC」：
+
+          110kg_0.61_0.52_0.55_0.51_0.38.mp4 谷底 18.93s 实测
+            18.67s v=-0.074   仍在下行
+            18.77s v=+0.045   ← 单帧翻正，旧逻辑在此误判换向
+            18.87s v=-0.062   又转负 → 该 rep 以 rom=0.0007m 收尾被门禁拒绝
+            19.07s v=+0.248   真正的向心上行开始，但状态已回 IDLE，无人接管
+
+        结果：轨迹里有全部 5 个往返，FSM 却只产出 3 个有效 rep，
+        其余退化为 28 个碎片候选（rom 多在 0.001~0.04m 量级）。
+
+        要求连续 confirm_frames 帧同向后才跃迁，可滤掉蹲底抖动。
+        实测（保持其余参数不变）：
+          该视频 3/5 → 5/5；confirm=1/2 仍为 3，confirm>=3 才修复。
+        取 3（0.1s @30fps）：既跨过抖动，又远短于最短向心时长（~0.3s）。
+        """
         self.exercise_type = exercise_type
         self.min_rom_m = min_rom_m
         self.min_dur_s = min_dur_s
         self.v_thresh = v_thresh_start  # 向心启动门限
         self.v_band = v_zero_band
+        self.confirm_frames = max(1, int(confirm_frames))
 
     # ──────────────────────────────────────────────────────────────────────────
     # 主入口
@@ -79,7 +101,20 @@ class BiomechanicalRepSegmenter:
         state = "IDLE"
         rep_start_idx = 0
 
-        for i in range(1, n - 2):
+        cf = self.confirm_frames
+
+        def _sustained(i: int, positive: bool) -> bool:
+            """i+1 .. i+cf 连续 cf 帧是否稳定同向（滤蹲底/顶部单帧抖动）。"""
+            for k in range(1, cf + 1):
+                vk = float(velocities[i + k])  # noqa: PI-LENS=unsafe-call
+                if positive:
+                    if vk <= self.v_band:
+                        return False
+                elif vk >= -self.v_band:
+                    return False
+            return True
+
+        for i in range(1, n - max(2, cf + 1)):
             v = float(velocities[i])  # noqa: PI-LENS=unsafe-call
             v_next = float(velocities[i + 1])  # noqa: PI-LENS=unsafe-call
 
@@ -110,14 +145,14 @@ class BiomechanicalRepSegmenter:
                         state = "ECCENTRIC"
 
                 elif state == "ECCENTRIC":
-                    # 底部换向：速度由负转正
-                    if v >= -self.v_band and v_next > self.v_band:
+                    # 底部换向：速度由负转正，且需连续 cf 帧确认（防蹲底抖动早产）
+                    if v >= -self.v_band and _sustained(i, positive=True):
                         state = "CONCENTRIC"
                         rep_start_idx = i  # 向心起始 = 底部换向点
 
                 elif state == "CONCENTRIC":
-                    # 向心结束：速度归零（顶部停顿）
-                    if v <= self.v_band and v_next < self.v_band:
+                    # 向心结束：速度归零（顶部停顿），同样需连续确认
+                    if v <= self.v_band and _sustained(i, positive=False):
                         rep_end_idx = i
                         self._validate_and_append(
                             reps,

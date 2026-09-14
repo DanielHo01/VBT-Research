@@ -28,9 +28,9 @@
   "diagnostics": {
     "n_frames": 219,
     "n_yolo": 199,
-    "elapsed_s": 22.5,
+    "elapsed_s": 15.4,
     "coverage": 1.0,
-    "ms_per_frame": 98.4,
+    "ms_per_frame": 67.4,
     "yolo_ratio": 0.909,
     "plate_diameter_m": 0.45,
     "exercise_type": "squat_bench",

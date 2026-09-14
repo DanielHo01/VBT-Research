@@ -71,9 +71,29 @@ std::vector<Rep> BiomechanicalRepSegmenter::segment(
 
     const bool is_deadlift = (exercise_type_ == "deadlift");
 
-    for (std::size_t i = 1; i + 1 < n; ++i) {
+    // 【2026-09-14 与 Python 对齐】状态跃迁需连续 kConfirmFrames 帧同向确认。
+    // 旧实现仅看 (i, i+1)，蹲底停顿的单帧速度抖动会触发「早产的 CONCENTRIC」，
+    // 该 rep 随即以极小 rom 收尾被门禁拒绝，真正的上行冲程再无状态机接管。
+    // 详见 vbtcore/segmenter.py 中 confirm_frames 的推导与实测数据。
+    constexpr std::size_t kConfirmFrames = 3;
+
+    // i+1 .. i+kConfirmFrames 连续同向？positive=true 要求全部 > +v_band_。
+    auto sustained = [&](std::size_t i, bool positive) -> bool {
+        for (std::size_t k = 1; k <= kConfirmFrames; ++k) {
+            const double vk = v_arr[i + k];
+            if (positive) {
+                if (vk <= v_band_) return false;
+            } else {
+                if (vk >= -v_band_) return false;
+            }
+        }
+        return true;
+    };
+
+    for (std::size_t i = 1; i + kConfirmFrames < n; ++i) {
         const double v = v_arr[i];
         const double v_next = v_arr[i + 1];
+        (void)v_next;
 
         if (is_deadlift) {
             // 硬拉拓扑（无 SSC，直接向心）
@@ -105,14 +125,14 @@ std::vector<Rep> BiomechanicalRepSegmenter::segment(
                     break;
                 case State::ECCENTRIC:
                     // 底部换向：v 由负转正过零点
-                    if (v >= -v_band_ && v_next > v_band_) {
+                    if (v >= -v_band_ && sustained(i, /*positive=*/true)) {
                         state = State::CONCENTRIC;
                         rep_start_idx = i;  // 向心起点 = 底部换向点
                     }
                     break;
                 case State::CONCENTRIC:
                     // 向心结束：速度归零（顶部停顿）
-                    if (v <= v_band_ && v_next < v_band_) {
+                    if (v <= v_band_ && sustained(i, /*positive=*/false)) {
                         validate_and_append(reps, rep_start_idx, i,
                                             t_arr, y_arr, v_arr);
                         state = State::IDLE;
