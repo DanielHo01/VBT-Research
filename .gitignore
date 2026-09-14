@@ -90,3 +90,6 @@ detection_distributions.json
 
 # One-off training scripts
 train_quick_test.py
+
+# C++ 桌面端构建产物
+vbtcore-cpp/build/
