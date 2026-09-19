@@ -3,13 +3,14 @@
  * =======================================
  * 把 vbtcore-cpp 的 C-linkage 函数暴露给 Kotlin/Java 层。
  */
-// Android log — no-op for LSP (NDK headers resolved at build time only)
-#define __android_log_print(...) ((void)0)
-#include "jni.h"
+// Real Android NDK logging (NOT a no-op)
+#include <android/log.h>
+#include <jni.h>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
+#include <chrono>
 #include "vbt/frame_analyzer.hpp"
 
 // vbtcore-cpp 头文件
@@ -108,7 +109,9 @@ Java_com_easyvbt_demo_EngineBridge_nativeAddFrame(
 ) {
     if (g_analyzer == nullptr) return;
 
+    auto jni_start = std::chrono::high_resolution_clock::now();
     jbyte* rgba_ptr = env->GetByteArrayElements(jRgbaData, nullptr);
+    auto get_end = std::chrono::high_resolution_clock::now();
     const jsize data_len = env->GetArrayLength(jRgbaData);
 
     if (rgba_ptr != nullptr && data_len >= strideBytes * height) {
@@ -122,9 +125,27 @@ Java_com_easyvbt_demo_EngineBridge_nativeAddFrame(
         );
     }
 
+    auto add_end = std::chrono::high_resolution_clock::now();
     if (rgba_ptr != nullptr) {
         env->ReleaseByteArrayElements(jRgbaData, rgba_ptr, JNI_ABORT);
     }
+    auto release_end = std::chrono::high_resolution_clock::now();
+
+    // JNI 层耗时诊断（每 30 帧输出一次，避免刷屏）
+    if (frameIdx % 30 == 0) {
+        auto us_d = [](auto tp1, auto tp2) -> double {
+            return std::chrono::duration_cast<std::chrono::microseconds>(tp2 - tp1).count();
+        };
+        double get_us   = us_d(jni_start, get_end);
+        double add_us   = us_d(get_end, add_end);
+        double rel_us   = us_d(add_end, release_end);
+        double total_us = us_d(jni_start, release_end);
+        __android_log_print(ANDROID_LOG_DEBUG, "VBTPerf",
+            "JNI[%05d]: total=%.1fμs  GetElem=%.1f  add_frame=%.1f  Release=%.1f  stride=%d h=%d",
+            frameIdx, total_us, get_us, add_us, rel_us, strideBytes, height);
+    }
+
+    (void)frameIdx;  // suppress unused warning
 }
 
 JNIEXPORT jboolean JNICALL
@@ -183,6 +204,9 @@ Java_com_easyvbt_demo_EngineBridge_nativeFinalize(
             status, mpp_str, detected, total,
             det_min, det_max, raw_min, raw_max);
     }
+    // 输出性能剖析汇总（VBTPerf tag）
+    __android_log_print(ANDROID_LOG_INFO, "VBTPerf",
+        "===== EasyVBT Performance Profile =====");
     return env->NewStringUTF(result_json.c_str());
 }
 
