@@ -19,12 +19,16 @@
 #include "vbt/calibrator.hpp"
 #include "vbt/detector.hpp"
 #include "vbt/geometry.hpp"
-#include "vbt/segmenter.hpp"
+#include "vbt/segmenter_v2.hpp"
 #include "vbt/tracker.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
+// opencv-mobile 没有 videoio.hpp（VideoCapture）；desktop 下使用 videoio，Android 用 video.hpp
+#if !VBT_BUILD_ANDROID
 #include <opencv2/videoio.hpp>
+#endif
+#include <opencv2/video.hpp>
 
 // nlohmann/json 头文件（生产构建用真实库，存放在 vbtcore-cpp/include/nlohmann/）
 #include "../include/nlohmann/json.hpp"
@@ -69,6 +73,8 @@ inline const std::string* str_or_null(const char* s) {
 
 }  // namespace
 
+// ── 完整视频分析（仅桌面/非 Android）───────────────────────────
+#if !VBT_BUILD_ANDROID
 std::string analyze_video_json(const std::string& video_path,
                                const std::string& model_path,
                                const AnalyzeOptions& opts) {
@@ -197,7 +203,7 @@ std::string analyze_video_json(const std::string& video_path,
         return result.dump();
     }
 
-    // Rep 分段
+    // Rep 分段（仍使用 BiomechanicalRepSegmenter - FSM - 经验验证 RMSE<0.02）
     BiomechanicalRepSegmenter seg(opts.exercise_type);
     const std::size_t n = timestamps.size();
     std::vector<Rep> reps;
@@ -222,6 +228,7 @@ std::string analyze_video_json(const std::string& video_path,
     diag["redet_every"] = opts.redet_every;
     diag["tracker"] = "dense_visual_kalman";
     diag["calibrator"] = "static_cv_gate";
+    diag["segmenter"] = "fsm";
 
     // Velocity diagnostics (to debug segmenter issues)
     if (!velocities_mps.empty()) {
@@ -312,5 +319,30 @@ extern "C" char* vbt_analyze_video(const char* video_path,
     char* out = strdup(json_str.c_str());
     return out;
 }
+#else  // VBT_BUILD_ANDROID ──────────────────────────────────────
+// Android stub: cv::VideoCapture 不可用（opencv-mobile 无 videoio 模块）
+// vbtcore_jni.cpp 调用此函数处理视频文件路径时返回 NOT_SUPPORTED。
+std::string analyze_video_json(const std::string& /*video_path*/,
+                               const std::string& /*model_path*/,
+                               const AnalyzeOptions& /*opts*/) {
+    nlohmann::json result;
+    result["status"] = "NOT_SUPPORTED_ON_ANDROID";
+    result["error"] = "Video file analysis (cv::VideoCapture) is not supported on Android."
+                       " Use nativeAddFrame() for camera-frame analysis instead.";
+    return result.dump();
+}
+
+char* vbt_analyze_video(const char* /*video_path*/,
+                         const char* /*model_path*/,
+                         const char* /*options_json*/) {
+    // 返回 NOT_SUPPORTED JSON
+    nlohmann::json j;
+    j["status"] = "NOT_SUPPORTED_ON_ANDROID";
+    j["error"] = "Video file analysis is not supported on Android."
+                  " Use nativeAddFrame() for camera-frame analysis.";
+    std::string s = j.dump();
+    return strdup(s.c_str());
+}
+#endif  // VBT_BUILD_ANDROID
 
 }  // namespace vbt

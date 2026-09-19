@@ -9,10 +9,13 @@
  */
 package com.easyvbt.demo
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
@@ -56,6 +59,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -89,22 +94,48 @@ class ResultViewModel : ViewModel() {
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** 从 assets 提取 best.onnx 到 filesDir，返回绝对路径 */
+    private fun extractModelAsset(context: android.content.Context): File {
+        val modelFile = File(context.filesDir, "best.onnx")
+        if (modelFile.exists() && modelFile.length() > 0) {
+            Log.i(TAG, "模型已存在: ${modelFile.absolutePath} (${modelFile.length() / 1024} KB)")
+            return modelFile
+        }
+        Log.i(TAG, "从 assets 提取 best.onnx...")
+        context.assets.open("best.onnx").use { input ->
+            FileOutputStream(modelFile).use { os ->
+                input.copyTo(os)
+            }
+        }
+        Log.i(TAG, "模型提取完成: ${modelFile.absolutePath} (${modelFile.length() / 1024} KB)")
+        return modelFile
+    }
+
     fun analyze(
         srcUri: Uri,
         contentResolver: android.content.ContentResolver,
+        context: android.content.Context,
     ) {
         viewModelScope.launch {
             try {
                 _state.value = State.Loading(srcUri.lastPathSegment ?: "video.mp4")
-                val (file, name) =
+                // 1. 提取模型（从 assets 到文件系统）
+                val modelFile =
                     withContext(Dispatchers.IO) {
-                        copyToCache(srcUri, contentResolver)
+                        extractModelAsset(context)
                     }
+                // 2. 使用 MediaMetadataRetriever 提取帧 → JNI → C++ 引擎
+                val name = srcUri.lastPathSegment ?: "video.mp4"
                 val result =
                     withContext(Dispatchers.Default) {
-                        EngineBridge.analyzeVideo(
-                            srcVideoPath = file.absolutePath,
-                            modelAssetPath = "best.onnx",
+                        EngineBridge.analyzeVideoFromUri(
+                            videoUri = srcUri,
+                            contentResolver = contentResolver,
+                            context = context,
+                            modelPath = modelFile.absolutePath,
+                            exerciseType = "squat_bench",
+                            plateDiameterM = 0.45,
+                            frameStep = 3, // 每隔 3 帧取一帧（30fps 视频 → ~10fps）
                         )
                     }
                 _state.value = State.Success(result.copy(video = name))
@@ -153,15 +184,83 @@ class ResultViewModel : ViewModel() {
 class MainActivity : ComponentActivity() {
     private val viewModel: ResultViewModel by viewModels()
 
+    // Activity 级别注册，生命周期稳定，不受 Composable 重组合影响
+    private val pickLauncher =
+        registerForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            Log.i(TAG, "ActivityResult: resultCode=${result.resultCode} RESULT_OK=${Activity.RESULT_OK}")
+            if (result.resultCode == Activity.RESULT_OK) {
+                val uri = result.data?.data
+                Log.i(TAG, "ActivityResult: uri=$uri")
+                if (uri != null) {
+                    // 用户从 SAF 选择视频后，尝试获取持久化权限
+                    try {
+                        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        contentResolver.takePersistableUriPermission(uri, flags)
+                        Log.i(TAG, "持久化读权限获取成功: $uri")
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "持久化读权限获取失败（单次访问）: ${e.message}")
+                    }
+                    viewModel.analyze(uri, contentResolver, this@MainActivity)
+                } else {
+                    Log.w(TAG, "ActivityResult: uri is null")
+                }
+            } else {
+                Log.w(TAG, "ActivityResult: resultCode=${result.resultCode} (not OK, user cancelled?)")
+            }
+        }
+
+    // 权限请求回调
+    private val mediaPermissionLauncher =
+        registerForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { results ->
+            val granted = results.entries.any { it.value }
+            Log.i(TAG, "媒体权限申请结果: $results granted=$granted")
+            if (granted) {
+                // 权限获取成功后，分析调试视频
+                val debugVideoUri = Uri.parse("file:///storage/emulated/0/Download/102.5kg_0.53_0.38.mp4")
+                viewModel.analyze(debugVideoUri, contentResolver, this@MainActivity)
+            } else {
+                _state.value = ResultViewModel.State.Error("需要 READ_MEDIA_VIDEO 权限才能读取视频")
+            }
+        }
+
+    private var _state: MutableStateFlow<ResultViewModel.State> = MutableStateFlow(ResultViewModel.State.Idle)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 检查并申请媒体读取权限
+        val mediaPerm =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_VIDEO
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        when {
+            ContextCompat.checkSelfPermission(this, mediaPerm) == PackageManager.PERMISSION_GRANTED -> {
+                Log.i(TAG, "媒体权限已授权，直接开始分析")
+                val debugVideoUri = Uri.parse("file:///storage/emulated/0/Download/102.5kg_0.53_0.38.mp4")
+                viewModel.analyze(debugVideoUri, contentResolver, this@MainActivity)
+            }
+
+            else -> {
+                Log.i(TAG, "请求媒体权限: $mediaPerm")
+                mediaPermissionLauncher.launch(arrayOf(mediaPerm))
+            }
+        }
+
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    DemoScreen(viewModel, contentResolver)
+                    DemoScreen(viewModel) { intent ->
+                        pickLauncher.launch(intent)
+                    }
                 }
             }
         }
@@ -171,20 +270,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun DemoScreen(
     viewModel: ResultViewModel,
-    contentResolver: android.content.ContentResolver,
+    onLaunchPicker: (Intent) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-    val pickLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult(),
-        ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                val uri = result.data?.data
-                if (uri != null) {
-                    viewModel.analyze(uri, contentResolver)
-                }
-            }
-        }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
@@ -209,7 +297,7 @@ private fun DemoScreen(
                             type = "video/*"
                             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("video/mp4"))
                         }
-                    pickLauncher.launch(intent)
+                    onLaunchPicker(intent)
                 }
             }
 
@@ -398,7 +486,7 @@ private fun VelocityChart(
         val path = Path()
         reps.forEachIndexed { i, rep ->
             val x = pad + xStep * (i + 1)
-            val y = h - pad - (rep.pcvMps / maxVel) * (h - 2 * pad)
+            val y = h - pad - ((rep.pcvMps / maxVel) * (h - 2 * pad)).toFloat()
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             drawCircle(color = color, radius = 6f, center = Offset(x, y))
         }
