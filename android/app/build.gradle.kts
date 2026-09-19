@@ -6,7 +6,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -20,19 +19,28 @@ android {
         versionCode = 1
         versionName = "0.1.0-demo"
 
-        // 模型文件从 assets 复制到 filesDir（vbtcore-cpp 需绝对路径）
+        ndk {
+            version = "28.2.13676358"
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+
+        // CMake arguments: OpenCV/JSON/vbtcore-cpp paths
         externalNativeBuild {
             cmake {
-                arguments +=
+                arguments.addAll(
                     listOf(
                         "-DANDROID_STL=c++_shared",
                         "-DANDROID_PLATFORM=android-24",
                         "-DVBT_BUILD_ANDROID=ON",
-                    )
+                        // Explicitly set NDK 28 path (AGP ndkVersion sometimes ignored on first configure)
+                        "-DANDROID_NDK=D:/AndroidSdk/ndk/28.2.13676358",
+                        "-DCMAKE_ANDROID_NDK=D:/AndroidSdk/ndk/28.2.13676358",
+                        "-DOpenCV_DIR=C:/Users/30625/Downloads/opencv-extracted/opencv-mobile-4.11.0-android/sdk/native/jni",
+                        "-DJSON_ROOT=${rootProject.projectDir}/../vbtcore-cpp",
+                        "-DVBTCORE_CPP_DIR=${rootProject.projectDir}/../vbtcore-cpp",
+                    ),
+                )
             }
-        }
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
     }
 
@@ -61,6 +69,17 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+
+    // CMakeLists.txt path (separate externalNativeBuild block, merges with above)
+    externalNativeBuild {
+        cmake {
+            path = file("../cpp/CMakeLists.txt")
+        }
     }
 
     packaging {

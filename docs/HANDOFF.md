@@ -39,6 +39,7 @@
 **影响**：8 条视频输出变化，**4 条修复计数、0 条退化**。
 
 **改动点**：
+
 - `vbtcore/segmenter.py` — 新增 `confirm_frames` 构造参数 + `_sustained()` 辅助
 - `vbtcore-cpp/src/segmenter.cpp` — 同步，`kConfirmFrames = 3` + `sustained` lambda
 
@@ -65,6 +66,11 @@ bash scripts/build_cpp_desktop.sh     # 需要 cmake + ninja + g++
 判据：通过 **≥20/34**，速度容差 **≤0.005 m/s**，**ASan 零内存泄漏**。
 
 本沙箱 apt 装不了 cmake/ninja，未能执行。已完成的替代验证：
+<<<<<<< HEAD
+=======
+
+>>>>>>> feat/refactor-python-core
+
 - `g++ -fsyntax-only` 语法检查通过
 - `vbtcore-cpp/tools/segmenter_parity.cpp` 直读轨迹 CSV 喂给 C++ 分段器，
   **3/3 条输出与 Python 逐位一致**
@@ -102,6 +108,11 @@ python scripts/holdout_intake.py --check
 | `30kg_1.03_0.89_0.76_0.65` | 4 | 4 | 计数对但**速度动态完全没跟上**（见下） |
 
 **前两条为什么不是漏检**（三重独立证据）：
+<<<<<<< HEAD
+=======
+
+>>>>>>> feat/refactor-python-core
+
 1. 用**完全独立于流水线**的方法复核（模板匹配 / HSV 颜色质心，不用 YOLO、
    光流、卡尔曼），得到的下蹲次数与流水线一致：3 和 4。
 2. **相机静止**：相位相关测得全程累计位移 0.001 m，排除镜头晃动污染轨迹。
@@ -339,4 +350,7 @@ RMSE 的"温和上升"掩盖了这个损失，**不能只看 RMSE 选参数**。
 2. **`redet_every=2`** —— 免费 2.1x，可立即采用（但需全量 34 条验证后再改默认值）。
 3. ~~输入分辨率下调~~ —— 模型输入固定 640x640，改需重新导出 ONNX。
 4. ~~重写宿主语言~~ —— Python 逻辑仅占 3%，即使归零也只快 20%。
+<<<<<<< HEAD
 
+=======
+>>>>>>> feat/refactor-python-core
