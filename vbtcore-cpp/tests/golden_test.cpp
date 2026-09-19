@@ -184,11 +184,18 @@ int main(int argc, char** argv) {
                         cmp.max_pcv_err, cmp.max_mpp_err * 100.0);
             n_pass++;
         } else {
-            std::printf("[FAIL] status=%s/%s reps=%d/%d mcv_err=%.4f (pcv_err=%.3f mpp_err=%.2f%%)\n",
-                        pred.value("status", "?").c_str(),
+            std::string pred_status = pred.value("status", "?");
+            std::printf("[FAIL] status=%s/%s reps=%d/%d mcv_err=%.4f (pcv_err=%.3f mpp_err=%.2f%%)",
+                        pred_status.c_str(),
                         baseline.value("status", "?").c_str(),
                         cmp.n_reps_pred, cmp.n_reps_baseline, cmp.max_vel_err,
                         cmp.max_pcv_err, cmp.max_mpp_err * 100.0);
+            if (pred_status == "NO_PLATE_DETECTED") {
+                if (pred.contains("diagnostics") && pred["diagnostics"].contains("detector_stub")) {
+                    std::printf(" stub=%d", (int)pred["diagnostics"]["detector_stub"]);
+                }
+            }
+            std::printf("\n");
             n_fail++;
         }
         report.push_back({

@@ -22,5 +22,3 @@ include(":app")
 
 // vbtcore-cpp 子项目（NDK 构建集成 CMake）
 // 路径相对 settings.gradle.kts：android/ → ../vbtcore-cpp
-include(":vbtcore-cpp")
-project(":vbtcore-cpp").projectDir = file("../vbtcore-cpp/android")

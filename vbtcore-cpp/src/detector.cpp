@@ -6,13 +6,12 @@
 
 #include "vbt/detector.hpp"
 
-#include "vbt/geometry.hpp"
-
 #if defined(VBT_HAS_ONNXRUNTIME) && VBT_HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
 #endif
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
 namespace vbt {
 
@@ -57,6 +56,18 @@ inline double iou(double cx1, double cy1, double w1, double h1,
     return union_ > 0.0 ? inter / union_ : 0.0;
 }
 
+/// canvas 坐标 → 原图坐标（letterbox 逆变换，纯 C++ 无需 OpenCV DNN）。
+inline void canvas_to_orig_coords(
+    double cx_c, double cy_c, double w_c, double h_c,
+    double scale, int pad_x, int pad_y,
+    double& out_cx, double& out_cy, double& out_w, double& out_h)
+{
+    out_cx = (cx_c - pad_x) / scale;
+    out_cy = (cy_c - pad_y) / scale;
+    out_w  = w_c / scale;
+    out_h  = h_c / scale;
+}
+
 /// 解析单帧 YOLO 输出 (1, N, 5+) →  Detection 列表。
 /// 模型格式：YOLOv11/v8 推理输出 (1, num_anchors, 5+num_classes)，
 /// 每行 = [cx, cy, w, h, conf, class_probs...]（conf 已是概率，禁止再套 sigmoid）。
@@ -64,8 +75,7 @@ std::vector<Detection> parse_yolo_output(
     const float* data, std::size_t num_boxes,
     int box_stride,
     float conf_thresh,
-    int orig_w, int orig_h,
-    const vbt::PreprocessResult& pp)
+    double scale, int pad_x, int pad_y)
 {
     std::vector<Detection> dets;
     dets.reserve(num_boxes);
@@ -73,25 +83,14 @@ std::vector<Detection> parse_yolo_output(
         const float* row = data + i * box_stride;
         const float obj_conf = score_as_prob(row[4]);
         if (obj_conf < conf_thresh) continue;
-        const double cx_c = row[0];
-        const double cy_c = row[1];
-        const double w_c = row[2];
-        const double h_c = row[3];
-        const auto orig = vbt::canvas_to_orig(pp, cx_c, cy_c, w_c, h_c);
-        // 【对齐 Python】Python 端 PlateDetector.detect 不做出画过滤，
-        // 直接返回所有过阈值检测。C++ 若额外剔除出画框，会改变
-        // analyze.cpp 里 max-area 的选框结果，造成两端标定/跟踪分叉。
-        // 出画拒绝属于「锚定打分」层策略，不应混在解析层。
-        Detection d;
-        d.cx = orig.cx;
-        d.cy = orig.cy;
-        d.w = orig.w;
-        d.h = orig.h;
+        const double cx_c = row[0], cy_c = row[1], w_c = row[2], h_c = row[3];
+        double cx, cy, w, h;
+        canvas_to_orig_coords(cx_c, cy_c, w_c, h_c, scale, pad_x, pad_y, cx, cy, w, h);
+        Detection d; d.cx = cx; d.cy = cy; d.w = w; d.h = h;
         d.conf = obj_conf;
-        d.ratio = orig.w / std::max(orig.h, 1e-6);
+        d.ratio = w / std::max(h, 1e-6);
         dets.push_back(d);
     }
-    // 按 conf 降序
     std::sort(dets.begin(), dets.end(),
               [](const Detection& a, const Detection& b) { return a.conf > b.conf; });
     return dets;
@@ -107,40 +106,25 @@ std::vector<Detection> parse_yolo_output(
 std::vector<Detection> parse_yolov11_transposed(
     const float* data, int num_anchors,
     float conf_thresh,
-    int orig_w, int orig_h,
-    const vbt::PreprocessResult& pp)
+    double scale, int pad_x, int pad_y)
 {
     std::vector<Detection> dets;
-    dets.reserve(64);  // 预分配合理大小
-
-    // 指针步长寻址：5 个通道，每通道 num_anchors 个 float
+    dets.reserve(64);
     const float* row_cx    = data + 0 * num_anchors;
     const float* row_cy    = data + 1 * num_anchors;
     const float* row_w     = data + 2 * num_anchors;
-    const float* row_h     = data + 3 * num_anchors;
+    const float* row_h    = data + 3 * num_anchors;
     const float* row_score = data + 4 * num_anchors;
 
     for (int i = 0; i < num_anchors; ++i) {
         const float score = score_as_prob(row_score[i]);
         if (score < conf_thresh) continue;
-
-        const double cx_c = row_cx[i];
-        const double cy_c = row_cy[i];
-        const double w_c  = row_w[i];
-        const double h_c  = row_h[i];
-
-        const auto orig = vbt::canvas_to_orig(pp, cx_c, cy_c, w_c, h_c);
-        // 【对齐 Python】Python 端 PlateDetector.detect 不做出画过滤，
-        // 直接返回所有过阈值检测。C++ 若额外剔除出画框，会改变
-        // analyze.cpp 里 max-area 的选框结果，造成两端标定/跟踪分叉。
-        // 出画拒绝属于「锚定打分」层策略，不应混在解析层。
-        Detection d;
-        d.cx = orig.cx;
-        d.cy = orig.cy;
-        d.w = orig.w;
-        d.h = orig.h;
+        const double cx_c = row_cx[i], cy_c = row_cy[i], w_c = row_w[i], h_c = row_h[i];
+        double cx, cy, w, h;
+        canvas_to_orig_coords(cx_c, cy_c, w_c, h_c, scale, pad_x, pad_y, cx, cy, w, h);
+        Detection d; d.cx = cx; d.cy = cy; d.w = w; d.h = h;
         d.conf = score;
-        d.ratio = orig.w / std::max(orig.h, 1e-6);
+        d.ratio = w / std::max(h, 1e-6);
         dets.push_back(d);
     }
     std::sort(dets.begin(), dets.end(),
@@ -170,7 +154,11 @@ struct PlateDetector::Impl {
     {
 #if defined(VBT_HAS_ONNXRUNTIME) && VBT_HAS_ONNXRUNTIME
         Ort::SessionOptions session_options;
-        session_options.SetIntraOpNumThreads(2);
+        session_options.SetIntraOpNumThreads(0);  // 0 = auto (all cores)
+        // GPU 加速（需要 CUDA toolkit + cuBLAS 库，WSL 需额外安装）
+        // 预期路径: LD_LIBRARY_PATH 包含 /usr/local/cuda/lib64
+        // #OrtCUDAProviderOptions cuda_opts;
+        // #session_options.AppendExecutionProvider_CUDA(cuda_opts);
         session = std::make_unique<Ort::Session>(
             env, model_path.c_str(), session_options);
         Ort::AllocatorWithDefaultOptions allocator;
@@ -204,19 +192,46 @@ std::vector<Detection> PlateDetector::detect(const cv::Mat& frame_bgr,
     if (frame_bgr.empty() || impl_ == nullptr || impl_->session == nullptr) {
         return {};
     }
-    // letterbox 预处理
-    auto pp = vbt::preprocess(frame_bgr, 640);
-    if (pp.blob_handle == nullptr) {
-        return {};
+
+    // ── Letterbox 预处理（纯 C++，不依赖 OpenCV DNN）──────────────
+    constexpr int INPUT_SIZE = 640;
+    const int orig_h = frame_bgr.rows, orig_w = frame_bgr.cols;
+    const double scale = std::min(
+        static_cast<double>(INPUT_SIZE) / orig_h,
+        static_cast<double>(INPUT_SIZE) / orig_w);
+    const int canvas_w = static_cast<int>(orig_w * scale);
+    const int canvas_h = static_cast<int>(orig_h * scale);
+    const int pad_x = (INPUT_SIZE - canvas_w) / 2;
+    const int pad_y = (INPUT_SIZE - canvas_h) / 2;
+
+    // resize + pad
+    cv::Mat resized, canvas(INPUT_SIZE, INPUT_SIZE, CV_8UC3, cv::Scalar(114, 114, 114));
+    cv::resize(frame_bgr, resized, {canvas_w, canvas_h});
+    resized.copyTo(canvas(cv::Rect(pad_x, pad_y, canvas_w, canvas_h)));
+
+    // BGR→RGB 并 1/255 归一化，手动填充 float blob (1,3,640,640)
+    // 等价于 cv::dnn::blobFromImage(canvas, 1.0/255.0)，但不依赖 OpenCV DNN
+    std::vector<float> blob_data(INPUT_SIZE * INPUT_SIZE * 3);
+    for (int y = 0; y < INPUT_SIZE; ++y) {
+        const cv::Vec3b* row = canvas.ptr<cv::Vec3b>(y);
+        for (int x = 0; x < INPUT_SIZE; ++x) {
+            const float b = row[x][0] * (1.0f / 255.0f);
+            const float g = row[x][1] * (1.0f / 255.0f);
+            const float r = row[x][2] * (1.0f / 255.0f);
+            blob_data[0 * INPUT_SIZE * INPUT_SIZE + y * INPUT_SIZE + x] = r;
+            blob_data[1 * INPUT_SIZE * INPUT_SIZE + y * INPUT_SIZE + x] = g;
+            blob_data[2 * INPUT_SIZE * INPUT_SIZE + y * INPUT_SIZE + x] = b;
+        }
     }
-    cv::Mat& blob = *static_cast<cv::Mat*>(pp.blob_handle);
+    (void)orig_h; (void)orig_w;  // suppress unused warnings
+
 
     // 创建输入 tensor
     Ort::MemoryInfo mem_info = Ort::MemoryInfo::CreateCpu(
         OrtArenaAllocator, OrtMemTypeDefault);
-    std::vector<int64_t> input_shape = {1, 3, 640, 640};
+    std::vector<int64_t> input_shape = {1, 3, INPUT_SIZE, INPUT_SIZE};
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-        mem_info, blob.ptr<float>(), blob.total() * sizeof(float),
+        mem_info, blob_data.data(), blob_data.size() * sizeof(float),
         input_shape.data(), input_shape.size());
 
     const char* input_name = impl_->input_names.empty()
@@ -242,14 +257,14 @@ std::vector<Detection> PlateDetector::detect(const cv::Mat& frame_bgr,
             const int num_anchors = static_cast<int>(b);
             return parse_yolov11_transposed(out_data, num_anchors,
                                             static_cast<float>(conf_thresh),
-                                            frame_bgr.cols, frame_bgr.rows, pp);
+                                            scale, pad_x, pad_y);
         }
         // YOLOv5 原始格式: (1, num_anchors, 5)
         const std::size_t num_boxes = static_cast<std::size_t>(a);
         const int box_stride = static_cast<int>(b);
         return parse_yolo_output(out_data, num_boxes, box_stride,
                                  static_cast<float>(conf_thresh),
-                                 frame_bgr.cols, frame_bgr.rows, pp);
+                                 scale, pad_x, pad_y);
     }
     return {};
 #else
@@ -264,7 +279,11 @@ std::unique_ptr<Detector> make_detector(const std::string& model_path) {
     try {
         auto det = std::make_unique<PlateDetector>(model_path);
         return det;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "[WARN] PlateDetector init failed, falling back to stub: %s\n", e.what());
+        return std::make_unique<StubDetector>();
     } catch (...) {
+        std::fprintf(stderr, "[WARN] PlateDetector init failed: unknown exception\n");
         return std::make_unique<StubDetector>();
     }
 #else
