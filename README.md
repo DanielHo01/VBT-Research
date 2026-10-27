@@ -28,6 +28,14 @@
 > 📌 **接手开发请先读 [`docs/HANDOFF.md`](docs/HANDOFF.md)** —— 当前卡点、
 > 最近改动、本地要做的三件事、以及不要重蹈的六条覆辙，都在那里。
 
+### 数据可得性
+
+**视频不随仓库发布**：开发集 34 条深蹲视频（含 GymAware 真值）含可识别受试者，仅作者本地保留。
+仓库里保留的是全部派生结果，成绩可逐条核对：
+[`ground_truth.csv`](validation/dataset_benchmark/ground_truth.csv)、
+逐视频 baseline JSON（`validation/reports/cpp_baseline/`）、覆盖度 JSON、诊断 CSV 与图。
+复现全量基准或跑 `--smoke` 需先取得视频，请开 issue 联系作者。
+
 ---
 
 ## 快速开始
@@ -47,6 +55,8 @@ python scripts/gen_cpp_baseline.py --workers 4 --copy-to-tmp
 ```
 
 ### 最小调用示例
+
+> 下面的路径指向本地开发集视频（不随仓库发布）；接口本身不依赖具体文件。
 
 ```python
 from vbtcore import analyze_video
@@ -94,7 +104,7 @@ scripts/
   build_cpp_desktop.sh    C++ 编译 + Iron Gate
 tests/                    26 个单元测试
 validation/
-  dataset_benchmark/      开发集 34 视频 + GymAware 真值
+  dataset_benchmark/      开发集 34 视频（本地，不随仓库发布）+ GymAware 真值
   holdout/                留出集（待采集，见 docs/HOLDOUT.md）
   reports/
     SCOREBOARD.md         ← 成绩唯一事实表

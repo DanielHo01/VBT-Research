@@ -24,8 +24,7 @@ pip install -r requirements.txt
 ### 0.3 模型与视频
 
 - 模型：`models/best.onnx`（10.1 MB，YOLOv11n，已 commit）
-- 视频：`validation/dataset_benchmark/raw_videos/`（34 个 mp4，已 commit）
-- 或从 GitHub Release `v1.0-videos` 下载
+- 视频：`validation/dataset_benchmark/raw_videos/`（34 个 mp4）—— **不随仓库发布**，需向作者索取
 
 ### 0.4 C++ 第三方库
 

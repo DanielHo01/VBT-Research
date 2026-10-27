@@ -23,10 +23,11 @@ jobs:
       - name: Run unit tests (26)
         run: python3 tests/run_all_tests.py
 
-  # 基准 smoke test：跑 2 条视频（1 条轻负荷 + 1 条杆-only 正确拒绝），
-  # 不追求数字对齐，只防"引擎跑不起来 / 状态码全崩"级回归。
-  # 全量 34 视频基准（~5 分钟）保持本地运行，避免 CI 时长与能耗负担。
-  benchmark-smoke:
+  # 引擎冒烟：只验证「模型在、能加载、能前向」这一层。
+  # 开发集视频含可识别受试者，不随仓库发布（见 README「数据可得性」），
+  # 因此原先跑 2 条真实视频的 smoke 换成合成帧。
+  # 全量 34 视频基准（~5 分钟）保持本地运行，需先向作者取得视频。
+  engine-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -35,22 +36,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install core benchmark deps
+      - name: Install core deps
         run: |
           pip install --upgrade pip
           pip install opencv-python-headless numpy scipy onnxruntime
 
-      - name: Smoke benchmark (2 videos)
+      - name: Model loads and forwards (synthetic frame)
         run: |
-          python3 scripts/run_benchmark_v0.py \
-            --tag smoke \
-            --only 102.5kg_0.51_0.48_0.36,20kg_0.87_0.88_0.89_0.91 \
-            --engine "vbtcore (CI smoke)"
+          python3 - <<'PY'
+          import numpy as np, onnxruntime as ort
+          from vbtcore import analyze_video  # 公共 API 可导入
 
-      - name: Upload smoke report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: benchmark-smoke
-          path: validation/reports/BENCHMARK_smoke.md
-          retention-days: 7
+          sess = ort.InferenceSession("models/best.onnx", providers=["CPUExecutionProvider"])
+          inp = sess.get_inputs()[0]
+          x = np.zeros(inp.shape, dtype=np.float32)
+          y = sess.run(None, {inp.name: x})[0]
+          print("input", inp.shape, "-> output", y.shape)
+          assert y.shape == (1, 5, 8400), f"unexpected output shape {y.shape}"
+          PY
+
+      - name: Benchmark脚本可解析（不执行）
+        run: python3 -m py_compile scripts/run_benchmark_v0.py
