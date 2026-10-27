@@ -15,10 +15,12 @@
 
 ```text
 validation/holdout/
-  raw_videos/            ← 视频本体（命名见第四节）
+  raw_videos/            ← 视频本体（命名见第四节；与开发集一样不随仓库发布）
   holdout_index.json     ← 索引（schema 同 dataset_index.json + 采集元信息）
   ground_truth.csv       ← 真值表（同开发集格式）
 ```
+
+> 留出集视频同样**不入版本库**（含可识别受试者）。`.gitignore` 的 `*.mp4` 同时覆盖开发集与留出集。
 
 `holdout_index.json` 条目（required 4 项与开发集一致，extra 用于覆盖度审计）：
 

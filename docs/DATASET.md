@@ -4,6 +4,17 @@
 
 ---
 
+## 视频不随仓库发布
+
+开发集 34 条深蹲视频（`validation/dataset_benchmark/raw_videos/`，含 GymAware 真值）
+**视频不随仓库发布**——素材含可识别受试者，仅作者本地保留，`.gitignore` 的 `*.mp4` 同理覆盖留出集。
+
+入版本库的是全部派生结果：`ground_truth.csv`、`dataset_index.json`、`absent_segments.json`、
+逐视频 baseline JSON（`validation/reports/cpp_baseline/`）、覆盖度 JSON 与诊断图表。
+成绩可逐条核对，但复跑基准需向作者取得视频。
+
+---
+
 ## 数据来源总览
 
 | 数据集 | 来源 | 图片数 | 标注数 | 类型 | 决策 |
